@@ -87,6 +87,7 @@ ARCPATCH="$(readConfigKey "arc.patch" "${USER_CONFIG_FILE}")"
 BOOTIPWAIT="$(readConfigKey "arc.bootipwait" "${USER_CONFIG_FILE}")"
 DIRECTBOOT="$(readConfigKey "arc.directboot" "${USER_CONFIG_FILE}")"
 EMMCBOOT="$(readConfigKey "arc.emmcboot" "${USER_CONFIG_FILE}")"
+CPUGOVERNOR="$(readConfigKey "arc.governor" "${USER_CONFIG_FILE}")"
 HDDSORT="$(readConfigKey "arc.hddsort" "${USER_CONFIG_FILE}")"
 KERNEL="$(readConfigKey "arc.kernel" "${USER_CONFIG_FILE}")"
 KERNELLOAD="$(readConfigKey "arc.kernelload" "${USER_CONFIG_FILE}")"
@@ -379,9 +380,12 @@ function arcVersion() {
   while read -r ID DESC; do
     writeConfigKey "modules.\"${ID}\"" "" "${USER_CONFIG_FILE}"
     for MOD in ${KOLIST[@]}; do
-      [ "${MOD}" == "${ID}" ] && echo "F ${ID}.ko" >>"${USER_UP_PATH}/modulelist"
+      [ "${MOD}" == "${ID}" ] && echo "N ${ID}.ko" >>"${USER_UP_PATH}/modulelist"
     done
   done < <(getAllModules "${PLATFORM}" "${KVERP}")
+  [ "${PLATFORM}" != "epyc7002" ] && echo "N cpufreq_gorvenor.ko" >>"${USER_UP_PATH}/modulelist"
+  [ "${PLATFORM}" != "epyc7002" ] && echo "N cpufreq_conservative.ko" >>"${USER_UP_PATH}/modulelist"
+  [ "${PLATFORM}" != "epyc7002" ] && echo "N cpufreq_ondemand.ko" >>"${USER_UP_PATH}/modulelist"
   # Check for Only Version
   if [ "${ONLYVERSION}" == "true" ]; then
     # Build isn't done
@@ -491,7 +495,7 @@ function arcSettings() {
   CUSTOM="$(readConfigKey "arc.custom" "${USER_CONFIG_FILE}")"
   # Get Network Config for Loader
   dialog --backtitle "$(backtitle)" --colors --title "Network Config" \
-    --infobox "Generating Network Config..." 3 35
+    --infobox "Generating Network Config..." 3 40
   sleep 2
   getnet
   if [ "${ONLYPATCH}" == "true" ]; then
@@ -504,18 +508,22 @@ function arcSettings() {
   # Select Portmap for Loader
   if [ "${DT}" == "false" ] && [ $(lspci -d ::106 | wc -l) -gt 0 ]; then
     dialog --backtitle "$(backtitle)" --colors --title "Storage Map" \
-      --infobox "Generating Storage Map..." 3 35
+      --infobox "Generating Storage Map..." 3 40
     sleep 2
     getmapSelection
   fi
   # Check for Custom Build
   if [ "${CUSTOM}" == "false" ]; then
+    # Select Governor for DSM
+    dialog --backtitle "$(backtitle)" --colors --title "DSM Frequency Scaling" \
+      --infobox "Generating Governor Table..." 3 40
+    governorSelection
+    # Select Addons
     dialog --backtitle "$(backtitle)" --colors --title "DSM Addons" \
-      --infobox "Loading Addons Table..." 3 35
-    # Add Arc Addons
+      --infobox "Loading Addons Table..." 3 40
     writeConfigKey "addons.acpid" "" "${USER_CONFIG_FILE}"
     writeConfigKey "addons.cpuinfo" "" "${USER_CONFIG_FILE}"
-    # Select Addons
+    writeConfigKey "addons.storagepanel" "" "${USER_CONFIG_FILE}"
     addonSelection
     # Check for DT and HBA/Raid Controller
     if [ "${PLATFORM}" != "epyc7002" ]; then
@@ -954,6 +962,7 @@ else
         echo "= \"\Z4========== Arc ==========\Zn \" "                                        >>"${TMP_PATH}/menu"
         echo "b \"DSM Addons \" "                                                             >>"${TMP_PATH}/menu"
         echo "d \"DSM Modules \" "                                                            >>"${TMP_PATH}/menu"
+        echo "g \"DSM Frequency Scaling \" "                                                  >>"${TMP_PATH}/menu"
         echo "e \"DSM Version \" "                                                            >>"${TMP_PATH}/menu"
         if [ ${SATACONTROLLER} -gt 0 ]; then
           echo "S \"DSM Sata PortMap \" "                                                     >>"${TMP_PATH}/menu"
@@ -1057,6 +1066,7 @@ else
         ;;
       b) addonMenu; NEXT="b" ;;
       d) modulesMenu; NEXT="d" ;;
+      g) governorMenu; NEXT="g" ;;
       e) ONLYVERSION="true" && arcVersion; NEXT="e" ;;
       S) storageMenu; NEXT="S" ;;
       P) storagepanelMenu; NEXT="P" ;;
