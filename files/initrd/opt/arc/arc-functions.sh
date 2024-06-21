@@ -1928,6 +1928,78 @@ function arcNIC () {
 }
 
 ###############################################################################
+# Reboot Menu
+function rebootMenu() {
+  rm -f "${TMP_PATH}/opts" >/dev/null
+  touch "${TMP_PATH}/opts"
+  # Selectable Reboot Options
+  echo -e "config \"Config Mode\"" >>"${TMP_PATH}/opts"
+  echo -e "update \"Automated Update Mode\"" >>"${TMP_PATH}/opts"
+  echo -e "recovery \"Recovery Mode\"" >>"${TMP_PATH}/opts"
+  echo -e "junior \"Reinstall Mode\"" >>"${TMP_PATH}/opts"
+  echo -e "bios \"BIOS/UEFI\"" >>"${TMP_PATH}/opts"
+  echo -e "poweroff \"Shutdown\"" >>"${TMP_PATH}/opts"
+  echo -e "shell \"Exit to Shell Cmdline\"" >>"${TMP_PATH}/opts"
+  dialog --backtitle "$(backtitle)" --title "DSM Frequency Scaling" \
+    --menu  "Choose a Destination" 0 0 0 --file "${TMP_PATH}/opts" \
+    2>${TMP_PATH}/resp
+  [ $? -ne 0 ] && return
+  resp=$(cat ${TMP_PATH}/resp)
+  [ -z "${resp}" ] && return
+  REDEST=${resp}
+  dialog --backtitle "$(backtitle)" --title "Reboot" \
+    --infobox "Reboot to ${REDEST}!" 0 0
+  if [ "${REDEST}" == "bios" ]; then
+    efibootmgr -n 0000
+    reboot
+    exit 0
+  elif [ "${REDEST}" == "poweroff" ]; then
+    poweroff
+    exit 0
+  elif [ "${REDEST}" == "shell" ]; then
+    clear
+    exit 0
+  else
+    rebootTo ${REDEST}
+    exit 0
+  fi
+  return
+}
+
+###############################################################################
+# Reset DSM Network
+function resetDSMNetwork {
+  MSG=""
+  MSG+="This option will clear all customized settings of the network card and restore them to the default state.\n"
+  MSG+="Warning:\nThis operation is irreversible. Please backup important data. Do you want to continue?"
+  dialog --backtitle "$(backtitle)" --title "Reset DSM Network" \
+    --yesno "${MSG}" 0 0
+  [ $? -ne 0 ] && return
+  DSMROOTS="$(findDSMRoot)"
+  if [ -z "${DSMROOTS}" ]; then
+    dialog --backtitle "$(backtitle)" --title "Reset DSM Network" \
+      --msgbox "No DSM system partition(md0) found!\nPlease insert all disks before continuing." 0 0
+    return
+  fi
+  (
+    mkdir -p "${TMP_PATH}/mdX"
+    for I in ${DSMROOTS}; do
+      mount -t ext4 "${I}" "${TMP_PATH}/mdX"
+      [ $? -ne 0 ] && continue
+      rm -f "${TMP_PATH}/mdX/etc/sysconfig/network-scripts/ifcfg-bond"* "${TMP_PATH}/mdX/etc/sysconfig/network-scripts/ifcfg-eth"*
+      sync
+      umount "${TMP_PATH}/mdX"
+    done
+    rm -rf "${TMP_PATH}/mdX"
+  ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Reset DSM Network" \
+    --progressbox "Resetting ..." 20 100
+  MSG="The network settings have been resetted."
+  dialog --backtitle "$(backtitle)" --title "Reset DSM Network" \
+    --msgbox "${MSG}" 0 0
+  return
+}
+
+###############################################################################
 # CPU Governor Menu
 function governorMenu () {
   governorSelection
@@ -1942,13 +2014,14 @@ function governorSelection () {
   CPUFREQSUPPORT=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor)
   if [ -n "${CPUFREQSUPPORT}" ]; then
     # Selectable CPU governors
-    echo -e "performance \"always run at max frequency\"" >>"${TMP_PATH}/opts"
     [ "${PLATFORM}" == "epyc7002" ] && echo -e "schedutil \"use schedutil to scale frequency\"" >>"${TMP_PATH}/opts"
     [ "${PLATFORM}" != "epyc7002" ] && echo -e "conservative \"use conservative to scale frequency\"" >>"${TMP_PATH}/opts"
     [ "${PLATFORM}" != "epyc7002" ] && echo -e "ondemand \"use ondemand to scale frequency\"" >>"${TMP_PATH}/opts"
+    echo -e "performance \"always run at max frequency\"" >>"${TMP_PATH}/opts"
+    echo -e "powersave \"always run at lowest frequency\"" >>"${TMP_PATH}/opts"
     echo -e "userspace \"use userspace settings to scale frequency\"" >>"${TMP_PATH}/opts"
     dialog --backtitle "$(backtitle)" --title "DSM Frequency Scaling" \
-      --default-item "performance" --menu  "Choose a Governor" 0 0 0 --file "${TMP_PATH}/opts" \
+      --menu  "Choose a Governor" 0 0 0 --file "${TMP_PATH}/opts" \
       2>${TMP_PATH}/resp
     [ $? -ne 0 ] && return
     resp=$(cat ${TMP_PATH}/resp)

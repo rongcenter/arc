@@ -20,7 +20,6 @@ RAMTOTAL=$(awk '/MemTotal:/ {printf "%.0f", $2 / 1024 / 1024}' /proc/meminfo 2>/
 
 # Check for Hypervisor
 if grep -q "^flags.*hypervisor.*" /proc/cpuinfo; then
-  # Check for Hypervisor
   MACHINE=$(lscpu | grep Hypervisor | awk '{print $3}')
 else
   MACHINE=NATIVE
@@ -120,8 +119,8 @@ if [ "${OFFLINE}" == "false" ]; then
   writeConfigKey "time.region" "${GETREGION}" "${USER_CONFIG_FILE}"
   writeConfigKey "time.timezone" "${GETTIMEZONE}" "${USER_CONFIG_FILE}"
   [ -z "{KEYMAP}" ] && writeConfigKey "keymap" "${GETKEYMAP}" "${USER_CONFIG_FILE}"
-  KEYMAP=${GETKEYMAP}
-  ln -fs /usr/share/zoneinfo/${REGION}/${TIMEZONE} /etc/localtime
+  [ -z "{KEYMAP}" ] && KEYMAP=${GETKEYMAP}
+  ln -fs /usr/share/zoneinfo/${GETREGION}/${GETTIMEZONE} /etc/localtime
   # NTP
   /etc/init.d/S49ntpd restart > /dev/null 2>&1
   hwclock -w > /dev/null 2>&1
@@ -383,7 +382,7 @@ function arcVersion() {
       [ "${MOD}" == "${ID}" ] && echo "N ${ID}.ko" >>"${USER_UP_PATH}/modulelist"
     done
   done < <(getAllModules "${PLATFORM}" "${KVERP}")
-  [ "${PLATFORM}" != "epyc7002" ] && echo "N cpufreq_gorvenor.ko" >>"${USER_UP_PATH}/modulelist"
+  [ "${PLATFORM}" != "epyc7002" ] && echo "N cpufreq_governor.ko" >>"${USER_UP_PATH}/modulelist"
   [ "${PLATFORM}" != "epyc7002" ] && echo "N cpufreq_conservative.ko" >>"${USER_UP_PATH}/modulelist"
   [ "${PLATFORM}" != "epyc7002" ] && echo "N cpufreq_ondemand.ko" >>"${USER_UP_PATH}/modulelist"
   # Check for Only Version
@@ -514,10 +513,12 @@ function arcSettings() {
   fi
   # Check for Custom Build
   if [ "${CUSTOM}" == "false" ]; then
-    # Select Governor for DSM
-    dialog --backtitle "$(backtitle)" --colors --title "DSM Frequency Scaling" \
-      --infobox "Generating Governor Table..." 3 40
-    governorSelection
+    if [ "${MACHINE}" == "NATIVE" ]; then
+      # Select Governor for DSM
+      dialog --backtitle "$(backtitle)" --colors --title "DSM Frequency Scaling" \
+        --infobox "Generating Governor Table..." 3 40
+      governorSelection
+    fi
     # Select Addons
     dialog --backtitle "$(backtitle)" --colors --title "DSM Addons" \
       --infobox "Loading Addons Table..." 3 40
@@ -893,22 +894,6 @@ function juniorboot() {
 }
 
 ###############################################################################
-# Calls boot.sh to boot into DSM Recovery Mode
-function recoveryboot() {
-  BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
-  [ "${BUILDDONE}" == "false" ] && dialog --backtitle "$(backtitle)" --title "Alert" \
-    --yesno "Config changed, please build Loader first." 0 0
-  if [ $? -eq 0 ]; then
-    make
-  fi
-  grub-editenv ${USER_GRUBENVFILE} set next_entry="recovery"
-  dialog --backtitle "$(backtitle)" --title "Arc Boot" \
-    --infobox "Booting DSM Recovery Mode...\nPlease stay patient!" 4 30
-  sleep 2
-  exec reboot
-}
-
-###############################################################################
 # Calls boot.sh to boot into DSM kernel/ramdisk
 function boot() {
   BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
@@ -986,8 +971,6 @@ else
           echo "i \"Boot IP Waittime: \Z4${BOOTIPWAIT}\Zn \" "                                >>"${TMP_PATH}/menu"
         fi
         echo "q \"Directboot: \Z4${DIRECTBOOT}\Zn \" "                                        >>"${TMP_PATH}/menu"
-        echo "J \"Boot DSM Reinstall Mode\" "                                                 >>"${TMP_PATH}/menu"
-        echo "I \"Boot DSM Recovery Mode\" "                                                  >>"${TMP_PATH}/menu"
       fi
       if [ "${DSMOPTS}" == "true" ]; then
         echo "7 \"\Z1Hide DSM Options\Zn \" "                                                 >>"${TMP_PATH}/menu"
@@ -1002,7 +985,7 @@ else
         echo "s \"Allow Downgrade \" "                                                        >>"${TMP_PATH}/menu"
         echo "t \"Change User Password \" "                                                   >>"${TMP_PATH}/menu"
         echo "N \"Add new User\" "                                                            >>"${TMP_PATH}/menu"
-        echo "T \"Force enable SSH in DSM \" "                                                >>"${TMP_PATH}/menu"
+        echo "J \"Reset DSM Network Config \" "                                               >>"${TMP_PATH}/menu"
         if [ "${PLATFORM}" == "epyc7002" ]; then
           echo "K \"Kernel: \Z4${KERNEL}\Zn \" "                                              >>"${TMP_PATH}/menu"
         fi
@@ -1015,6 +998,7 @@ else
         echo "o \"Switch MacSys: \Z4${MACSYS}\Zn \" "                                         >>"${TMP_PATH}/menu"
         echo "W \"RD Compression: \Z4${RD_COMPRESSED}\Zn \" "                                 >>"${TMP_PATH}/menu"
         echo "X \"Sata DOM: \Z4${SATADOM}\Zn \" "                                             >>"${TMP_PATH}/menu"
+        echo "T \"Force enable SSH in DSM \" "                                                >>"${TMP_PATH}/menu"
       fi
     fi
     if [ "${DEVOPTS}" == "true" ]; then
@@ -1030,7 +1014,7 @@ else
       echo "L \"Grep Logs from dbgutils \" "                                                  >>"${TMP_PATH}/menu"
       echo "w \"Reset Loader to Defaults\" "                                                  >>"${TMP_PATH}/menu"
       echo "C \"Clone Loader to Disk\" "                                                      >>"${TMP_PATH}/menu"
-      echo "F \"\Z1Formate Disk\Zn \" "                                                       >>"${TMP_PATH}/menu"
+      echo "F \"\Z1Formate Disks\Zn \" "                                                      >>"${TMP_PATH}/menu"
       echo "n \"Edit Grub Config \" "                                                         >>"${TMP_PATH}/menu"
       echo "v \"Write Modifications to Disk \" "                                              >>"${TMP_PATH}/menu"
       echo "G \"Install opkg Package Manager \" "                                             >>"${TMP_PATH}/menu"
@@ -1043,6 +1027,7 @@ else
     if [ "${OFFLINE}" == "false" ]; then
       echo "z \"Update Loader\" "                                                             >>"${TMP_PATH}/menu"
     fi
+    echo "I \"Reboot \" "                                                                     >>"${TMP_PATH}/menu"
     echo "V \"Credits \" "                                                                    >>"${TMP_PATH}/menu"
 
     dialog --clear --default-item ${NEXT} --backtitle "$(backtitle)" --colors \
@@ -1097,8 +1082,6 @@ else
         writeConfigKey "arc.directboot" "${DIRECTBOOT}" "${USER_CONFIG_FILE}"
         NEXT="q"
         ;;
-      J) juniorboot; NEXT="J" ;;
-      I) recoveryboot; NEXT="I" ;;
       # DSM Section
       7) [ "${DSMOPTS}" == "true" ] && DSMOPTS='false' || DSMOPTS='true'
         DSMOPTS="${DSMOPTS}"
@@ -1109,6 +1092,7 @@ else
       s) downgradeMenu; NEXT="s" ;;
       t) resetPassword; NEXT="t" ;;
       N) addNewDSMUser; NEXT="N" ;;
+      J) resetDSMNetwork; NEXT="J" ;;
       K) [ "${KERNEL}" == "official" ] && KERNEL='custom' || KERNEL='official'
         writeConfigKey "arc.kernel" "${KERNEL}" "${USER_CONFIG_FILE}"
         if [ "${ODP}" == "true" ]; then
@@ -1118,7 +1102,7 @@ else
         PLATFORM="$(readConfigKey "platform" "${USER_CONFIG_FILE}")"
         PRODUCTVER="$(readConfigKey "productver" "${USER_CONFIG_FILE}")"
         KVER="$(readConfigKey "platforms.${PLATFORM}.productvers.[${PRODUCTVER}].kver" "${P_FILE}")"
-        if [[ -n "${PLATFORM}" && -n "${KVER}" ]]; then
+        if [ -n "${PLATFORM}" ] && [ -n "${KVER}" ]; then
           if [ "${PLATFORM}" == "epyc7002" ]; then
             KVERP="${PRODUCTVER}-${KVER}"
           else
@@ -1214,6 +1198,7 @@ else
         ;;
       y) keymapMenu; NEXT="y" ;;
       z) updateMenu; NEXT="z" ;;
+      I) rebootMenu; NEXT="I" ;;
       V) credits; NEXT="V" ;;
     esac
   done
