@@ -40,30 +40,36 @@ fi
 BUS=$(getBus "${LOADER_DISK}")
 
 # Offline Mode check
+ARCNIC="$(readConfigKey "arc.nic" "${USER_CONFIG_FILE}")"
+OFFLINE="$(readConfigKey "arc.offline" "${USER_CONFIG_FILE}")"
 CUSTOM="$(readConfigKey "arc.custom" "${USER_CONFIG_FILE}")"
-ETHX=$(ls /sys/class/net/ 2>/dev/null | grep eth) # real network cards list
-for ETH in ${ETHX}; do
-  # Update Check
-  NEWTAG=$(curl --interface ${ETH} -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc/releases" | jq -r ".[].tag_name" | sort -rV | head -1)
-  if [ -n "${NEWTAG}" ]; then
-    ARCNIC=${ETH}
-    break
+NEWTAG=$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc/releases" | jq -r ".[].tag_name" | sort -rV | head -1)
+if [ -n "${NEWTAG}" ]; then
+  [ -z "${ARCNIC}" ] && ARCNIC="auto"
+elif [ -z "${NEWTAG}" ]; then
+  ETHX=$(ls /sys/class/net/ 2>/dev/null | grep eth) # real network cards list
+  for ETH in ${ETHX}; do
+    # Update Check
+    NEWTAG=$(curl --interface ${ETH} -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc/releases" | jq -r ".[].tag_name" | sort -rV | head -1)
+    if [ -n "${NEWTAG}" ]; then
+      [ -z "${ARCNIC}" ] && ARCNIC="${ETH}"
+      break
+    fi
+  done
+  if [ -n "${ARCNIC}" ]; then
+    writeConfigKey "arc.offline" "false" "${USER_CONFIG_FILE}"
+  elif [ -z "${ARCNIC}" ] && [ "${CUSTOM}" == "false" ]; then
+    writeConfigKey "arc.offline" "true" "${USER_CONFIG_FILE}"
+    cp -f "${PART3_PATH}/configs/offline.json" "${ARC_PATH}/include/offline.json"
+    [ -z "${ARCNIC}" ] && ARCNIC="auto"
+    dialog --backtitle "$(backtitle)" --title "Online Check" \
+        --msgbox "Could not connect to Github.\nSwitch to Offline Mode!" 0 0
+  elif [ -z "${ARCNIC}" ] && [ "${CUSTOM}" == "true" ]; then
+    dialog --backtitle "$(backtitle)" --title "Online Check" \
+      --infobox "Could not connect to Github.\nReboot to try again!" 0 0
+    sleep 10
+    exec reboot
   fi
-done
-[ -z "${NEWTAG}" ] && NEWTAG="${ARC_VERSION}"
-if [ -n "${ARCNIC}" ]; then
-  writeConfigKey "arc.offline" "false" "${USER_CONFIG_FILE}"
-elif [ -z "${ARCNIC}" ] && [ "${CUSTOM}" == "false" ]; then
-  writeConfigKey "arc.offline" "true" "${USER_CONFIG_FILE}"
-  cp -f "${PART3_PATH}/configs/offline.json" "${ARC_PATH}/include/offline.json"
-  ARCNIC="eth99"
-  dialog --backtitle "$(backtitle)" --title "Online Check" \
-      --msgbox "Could not connect to Github.\nSwitch to Offline Mode!" 0 0
-elif [ -z "${ARCNIC}" ] && [ "${CUSTOM}" == "true" ]; then
-  dialog --backtitle "$(backtitle)" --title "Online Check" \
-    --infobox "Could not connect to Github.\nReboot to try again!" 0 0
-  sleep 5
-  exec reboot
 fi
 writeConfigKey "arc.nic" "${ARCNIC}" "${USER_CONFIG_FILE}"
 ARCNIC="$(readConfigKey "arc.nic" "${USER_CONFIG_FILE}")"
@@ -107,30 +113,35 @@ SASCONTROLLER="$(readConfigKey "device.sascontroller" "${USER_CONFIG_FILE}")"
 CONFDONE="$(readConfigKey "arc.confdone" "${USER_CONFIG_FILE}")"
 BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
 
-# Get Loader Config
+# Get Keymap and Timezone Config
 LAYOUT="$(readConfigKey "layout" "${USER_CONFIG_FILE}")"
 KEYMAP="$(readConfigKey "keymap" "${USER_CONFIG_FILE}")"
-
 if [ "${OFFLINE}" == "false" ]; then
   # Timezone
-  GETREGION=$(curl --interface ${ARCNIC} -m 5 -v "http://ip-api.com/line?fields=timezone" 2>/dev/null | tr -d '\n' | cut -d '/' -f1)
-  GETTIMEZONE=$(curl --interface ${ARCNIC} -m 5 -v "http://ip-api.com/line?fields=timezone" 2>/dev/null | tr -d '\n' | cut -d '/' -f2)
-  GETKEYMAP=$(curl --interface ${ARCNIC} -m 5 -v "http://ip-api.com/line?fields=countryCode" 2>/dev/null | tr '[:upper:]' '[:lower:]')
-  writeConfigKey "time.region" "${GETREGION}" "${USER_CONFIG_FILE}"
-  writeConfigKey "time.timezone" "${GETTIMEZONE}" "${USER_CONFIG_FILE}"
-  [ -z "{KEYMAP}" ] && writeConfigKey "keymap" "${GETKEYMAP}" "${USER_CONFIG_FILE}"
-  [ -z "{KEYMAP}" ] && KEYMAP=${GETKEYMAP}
-  ln -fs /usr/share/zoneinfo/${GETREGION}/${GETTIMEZONE} /etc/localtime
+  if [ "${ARCNIC}" == "auto" ]; then
+    REGION=$(curl -m 5 -v "http://ip-api.com/line?fields=timezone" 2>/dev/null | tr -d '\n' | cut -d '/' -f1)
+    TIMEZONE=$(curl -m 5 -v "http://ip-api.com/line?fields=timezone" 2>/dev/null | tr -d '\n' | cut -d '/' -f2)
+    [ -z "${KEYMAP}" ] && KEYMAP=$(curl -m 5 -v "http://ip-api.com/line?fields=countryCode" 2>/dev/null | tr '[:upper:]' '[:lower:]')
+  else
+    REGION=$(curl --interface ${ARCNIC} -m 5 -v "http://ip-api.com/line?fields=timezone" 2>/dev/null | tr -d '\n' | cut -d '/' -f1)
+    TIMEZONE=$(curl --interface ${ARCNIC} -m 5 -v "http://ip-api.com/line?fields=timezone" 2>/dev/null | tr -d '\n' | cut -d '/' -f2)
+    [ -z "${KEYMAP}" ] && KEYMAP=$(curl --interface ${ARCNIC} -m 5 -v "http://ip-api.com/line?fields=countryCode" 2>/dev/null | tr '[:upper:]' '[:lower:]')
+  fi
+  writeConfigKey "time.region" "${REGION}" "${USER_CONFIG_FILE}"
+  writeConfigKey "time.timezone" "${TIMEZONE}" "${USER_CONFIG_FILE}"
+  [ -n "${KEYMAP}" ] && writeConfigKey "keymap" "${KEYMAP}" "${USER_CONFIG_FILE}"
+  ln -fs /usr/share/zoneinfo/${REGION}/${TIMEZONE} /etc/localtime
   # NTP
   /etc/init.d/S49ntpd restart > /dev/null 2>&1
   hwclock -w > /dev/null 2>&1
 fi
-loadkeys ${KEYMAP:-en}
+[ -z "${KEYMAP}" ] && KEYMAP="en"
+loadkeys ${KEYMAP}
 
 ###############################################################################
 # Mounts backtitle dynamically
 function backtitle() {
-  if [ "${NEWTAG}" != "${ARC_VERSION}" ] && [ "${OFFLINE}" == "false" ]; then
+  if [ -n "${NEWTAG}" ] && [ "${NEWTAG}" != "${ARC_VERSION}" ] && [ "${OFFLINE}" == "false" ]; then
     ARC_TITLE="${ARC_TITLE} -> ${NEWTAG}"
   fi
   if [ -z "${MODEL}" ]; then
@@ -226,9 +237,8 @@ function arcModel() {
             COMPATIBLE=0
           fi
           [ -z "$(grep -w "${M}" "${S_FILE}")" ] && COMPATIBLE=0
-        else
-          [ -z "$(grep -w "${M}" "${S_FILE}")" ] && BETA="Syno" || BETA="Arc"
         fi
+        [ -z "$(grep -w "${M}" "${S_FILE}")" ] && BETA="Syno" || BETA="Arc"
         [ -z "$(grep -w "${A}" "${P_FILE}")" ] && COMPATIBLE=0
         if [ -n "${ARC_KEY}" ]; then
           [ ${COMPATIBLE} -eq 1 ] && echo -e "${M} \"\t$(printf "\Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "${CPU}" "${A}" "${DTS}" "${ARC}" "${IGPUS}" "${HBAS}" "${M_2_CACHE}" "${M_2_STORAGE}" "${USBS}" "${BETA}")\" ">>"${TMP_PATH}/menu"
@@ -240,13 +250,13 @@ function arcModel() {
         dialog --backtitle "$(backtitle)" --title "Arc DSM Model" --colors \
           --cancel-label "Show all" --help-button --help-label "Exit" \
           --extra-button --extra-label "Info" \
-          --menu "Supported Models for Loader (x = supported / + = need Addons)\n$(printf "\Zb%-16s\Zn \Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "CPU" "Platform" "DT" "Arc" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 120 0 \
+          --menu "Supported Models for Loader (x = supported / + = need Addons) | Syno Models can have faulty Values.\n$(printf "\Zb%-16s\Zn \Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "CPU" "Platform" "DT" "Arc" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 120 0 \
           --file "${TMP_PATH}/menu" 2>"${TMP_PATH}/resp"
       else
         dialog --backtitle "$(backtitle)" --title "DSM Model" --colors \
           --cancel-label "Show all" --help-button --help-label "Exit" \
           --extra-button --extra-label "Info" \
-          --menu "Supported Models for Loader (x = supported / + = need Addons) | Syno Models can have faulty Values.\n$(printf "\Zb%-16s\Zn \Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "CPU" "Platform" "DT" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 120 0 \
+          --menu "Supported Models for Loader (x = supported / + = need Addons)\n$(printf "\Zb%-16s\Zn \Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "CPU" "Platform" "DT" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 120 0 \
           --file "${TMP_PATH}/menu" 2>"${TMP_PATH}/resp"
       fi
       RET=$?
@@ -530,24 +540,24 @@ function arcSettings() {
     if [ "${PLATFORM}" != "epyc7002" ]; then
       if [ "${DT}" == "true" ] && [ "${EXTERNALCONTROLLER}" == "true" ]; then
         dialog --backtitle "$(backtitle)" --title "Arc Warning" \
-          --msgbox "WARN: You use a HBA/Raid Controller and selected a DT Model.\nThis is still an experimental Feature." 0 0
+          --msgbox "WARN: You use a HBA/Raid Controller and selected a DT Model. This is still an experimental." 5 90
       fi
     fi
     # Check for more then 8 Ethernet Ports
     DEVICENIC="$(readConfigKey "device.nic" "${USER_CONFIG_FILE}")"
     if [ ${DEVICENIC} -gt 8 ]; then
       dialog --backtitle "$(backtitle)" --title "Arc Warning" \
-        --msgbox "WARN: You have more then 8 Ethernet Ports.\nThere are only 8 supported by DSM." 0 0
+        --msgbox "WARN: You have more then 8 Ethernet Ports. There are only 8 supported by DSM." 5 90
     fi
     # Check for AES
     if [ "${AESSYS}" == "false" ]; then
       dialog --backtitle "$(backtitle)" --title "Arc Warning" \
-        --msgbox "WARN: Your System doesn't have AES Support for Hardwareencryption in DSM." 0 0
+        --msgbox "WARN: Your System doesn't have AES Support for Hardwareencryption in DSM." 5 90
     fi
     # Check for ACPI
     if [ "${ACPISYS}" == "false" ]; then
       dialog --backtitle "$(backtitle)" --title "Arc Warning" \
-        --msgbox "WARN: Your System doesn't have ACPI Support for CPU Frequency Scaling in DSM." 0 0
+        --msgbox "WARN: Your System doesn't have ACPI Support for CPU Frequency Scaling in DSM." 5 90
     fi
   fi
   EMMCBOOT="$(readConfigKey "arc.emmcboot" "${USER_CONFIG_FILE}")"
@@ -684,7 +694,11 @@ function make() {
       --infobox "Get PAT Data from Syno..." 3 30
     idx=0
     while [ ${idx} -le 3 ]; do # Loop 3 times, if successful, break
-      PAT_DATA=$(curl --interface ${ARCNIC} -skL -m 10 "https://www.synology.com/api/support/findDownloadInfo?lang=en-us&product=${MODEL/+/%2B}&major=${PRODUCTVER%%.*}&minor=${PRODUCTVER##*.}")
+      if [ "${ARCNIC}" == "auto" ]; then
+        PAT_DATA=$(curl -skL -m 10 "https://www.synology.com/api/support/findDownloadInfo?lang=en-us&product=${MODEL/+/%2B}&major=${PRODUCTVER%%.*}&minor=${PRODUCTVER##*.}")
+      else
+        PAT_DATA=$(curl --interface ${ARCNIC} -skL -m 10 "https://www.synology.com/api/support/findDownloadInfo?lang=en-us&product=${MODEL/+/%2B}&major=${PRODUCTVER%%.*}&minor=${PRODUCTVER##*.}")
+      fi
       if [ "$(echo ${PAT_DATA} | jq -r '.success' 2>/dev/null)" == "true" ]; then
         if echo ${PAT_DATA} | jq -r '.info.system.detail[0].items[0].files[0].label_ext' 2>/dev/null | grep -q 'pat'; then
           PAT_URL=$(echo ${PAT_DATA} | jq -r '.info.system.detail[0].items[0].files[0].url')
@@ -706,8 +720,13 @@ function make() {
         --infobox "Get PAT Data from Github..." 3 30
       idx=0
       while [ ${idx} -le 3 ]; do # Loop 3 times, if successful, break
-        PAT_URL=$(curl --interface ${ARCNIC} -m 10 -skL "https://raw.githubusercontent.com/AuxXxilium/arc-dsm/main/dsm/${MODEL/+/%2B}/${PRODUCTVER}/pat_url")
-        PAT_HASH=$(curl --interface ${ARCNIC} -m 10 -skL "https://raw.githubusercontent.com/AuxXxilium/arc-dsm/main/dsm/${MODEL/+/%2B}/${PRODUCTVER}/pat_hash")
+        if [ "${ARCNIC}" == "auto" ]; then
+          PAT_URL=$(curl -skL -m 10 "https://raw.githubusercontent.com/AuxXxilium/arc-dsm/main/dsm/${MODEL/+/%2B}/${PRODUCTVER}/pat_url")
+          PAT_HASH=$(curl -skL -m 10 "https://raw.githubusercontent.com/AuxXxilium/arc-dsm/main/dsm/${MODEL/+/%2B}/${PRODUCTVER}/pat_hash")
+        else
+          PAT_URL=$(curl --interface ${ARCNIC} -m 10 -skL "https://raw.githubusercontent.com/AuxXxilium/arc-dsm/main/dsm/${MODEL/+/%2B}/${PRODUCTVER}/pat_url")
+          PAT_HASH=$(curl --interface ${ARCNIC} -m 10 -skL "https://raw.githubusercontent.com/AuxXxilium/arc-dsm/main/dsm/${MODEL/+/%2B}/${PRODUCTVER}/pat_hash")
+        fi
         PAT_URL=${PAT_URL%%\?*}
         if [ -n "${PAT_URL}" ] && [ -n "${PAT_HASH}" ]; then
           if echo "${PAT_URL}" | grep -q "https://"; then
@@ -747,7 +766,9 @@ function make() {
         # Get new Files
         DSM_FILE="${UNTAR_PAT_PATH}/${PAT_HASH}.tar"
         DSM_URL="https://raw.githubusercontent.com/AuxXxilium/arc-dsm/main/files/${MODEL/+/%2B}/${PRODUCTVER}/${PAT_HASH}.tar"
-        if curl --interface ${ARCNIC} -skL "${DSM_URL}" -o "${DSM_FILE}"; then
+        if curl -skL "${DSM_URL}" -o "${DSM_FILE}"; then
+          VALID="true"
+        elif curl --interface ${ARCNIC} -skL "${DSM_URL}" -o "${DSM_FILE}"; then
           VALID="true"
         else
           dialog --backtitle "$(backtitle)" --title "DSM Download" --aspect 18 \
@@ -755,7 +776,9 @@ function make() {
           sleep 5
           # Grep PAT_URL
           PAT_FILE="${TMP_PATH}/${PAT_HASH}.pat"
-          if curl --interface ${ARCNIC} -skL "${PAT_URL}" -o "${PAT_FILE}"; then
+          if curl -skL "${DSM_URL}" -o "${DSM_FILE}"; then
+            VALID="true"
+          elif curl --interface ${ARCNIC} -skL "${DSM_URL}" -o "${DSM_FILE}"; then
             VALID="true"
           else
             dialog --backtitle "$(backtitle)" --title "DSM Download" --aspect 18 \
