@@ -135,8 +135,10 @@ if [ "${OFFLINE}" == "false" ]; then
   /etc/init.d/S49ntpd restart > /dev/null 2>&1
   hwclock -w > /dev/null 2>&1
 fi
-[ -z "${KEYMAP}" ] && KEYMAP="en"
-loadkeys ${KEYMAP}
+if [ -z "${LAYOUT}"]; then
+  [ -z "${KEYMAP}" ] && KEYMAP="en"
+  loadkeys ${KEYMAP}
+fi
 
 ###############################################################################
 # Mounts backtitle dynamically
@@ -392,7 +394,6 @@ function arcVersion() {
       [ "${MOD}" == "${ID}" ] && echo "N ${ID}.ko" >>"${USER_UP_PATH}/modulelist"
     done
   done < <(getAllModules "${PLATFORM}" "${KVERP}")
-  [ "${PLATFORM}" != "epyc7002" ] && echo "N cpufreq_governor.ko" >>"${USER_UP_PATH}/modulelist"
   [ "${PLATFORM}" != "epyc7002" ] && echo "N cpufreq_conservative.ko" >>"${USER_UP_PATH}/modulelist"
   [ "${PLATFORM}" != "epyc7002" ] && echo "N cpufreq_ondemand.ko" >>"${USER_UP_PATH}/modulelist"
   # Check for Only Version
@@ -1040,7 +1041,9 @@ else
       echo "F \"\Z1Formate Disks\Zn \" "                                                      >>"${TMP_PATH}/menu"
       echo "n \"Edit Grub Config \" "                                                         >>"${TMP_PATH}/menu"
       echo "v \"Write Modifications to Disk \" "                                              >>"${TMP_PATH}/menu"
-      echo "G \"Install opkg Package Manager \" "                                             >>"${TMP_PATH}/menu"
+      if [ "${OFFLINE}" == "false" ]; then
+        echo "G \"Install opkg Package Manager \" "                                           >>"${TMP_PATH}/menu"
+      fi
     fi
     echo "= \"\Z4========== Misc ==========\Zn \" "                                           >>"${TMP_PATH}/menu"
     echo "x \"Backup/Restore/Recovery \" "                                                    >>"${TMP_PATH}/menu"
@@ -1050,7 +1053,7 @@ else
     if [ "${OFFLINE}" == "false" ]; then
       echo "z \"Update\" "                                                                    >>"${TMP_PATH}/menu"
     fi
-    echo "I \"Reboot \" "                                                                     >>"${TMP_PATH}/menu"
+    echo "I \"Restart/Shutdown \" "                                                           >>"${TMP_PATH}/menu"
     echo "V \"Credits \" "                                                                    >>"${TMP_PATH}/menu"
 
     dialog --clear --default-item ${NEXT} --backtitle "$(backtitle)" --colors \
@@ -1084,7 +1087,7 @@ else
       R) [ "${CUSTOM}" == "false" ] && CUSTOM='true' || CUSTOM='false'
         writeConfigKey "arc.custom" "${CUSTOM}" "${USER_CONFIG_FILE}"
         if [ "${CUSTOM}" == "true" ]; then
-          [ ! -f "${PART3_PATH}/automated" ] && echo "${ARC_VERSION}-${MODEL}-{PRODUCTVER}-custom" >"${PART3_PATH}/automated"
+          [ ! -f "${PART3_PATH}/automated" ] && echo "${ARC_VERSION}-${MODEL}-${PRODUCTVER}-custom" >"${PART3_PATH}/automated"
         elif [ "${CUSTOM}" == "false" ]; then
           [ -f "${PART3_PATH}/automated" ] && rm -f "${PART3_PATH}/automated" >/dev/null
         fi

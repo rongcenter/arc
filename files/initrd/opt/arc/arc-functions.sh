@@ -1960,6 +1960,8 @@ function rebootMenu() {
   echo -e "bios \"BIOS/UEFI\"" >>"${TMP_PATH}/opts"
   echo -e "poweroff \"Shutdown\"" >>"${TMP_PATH}/opts"
   echo -e "shell \"Exit to Shell Cmdline\"" >>"${TMP_PATH}/opts"
+  echo -e "init \"Restart Loader Init\"" >>"${TMP_PATH}/opts"
+  echo -e "network \"Restart Network Service\"" >>"${TMP_PATH}/opts"
   dialog --backtitle "$(backtitle)" --title "Reboot" \
     --menu  "Choose a Destination" 0 0 0 --file "${TMP_PATH}/opts" \
     2>${TMP_PATH}/resp
@@ -1979,6 +1981,11 @@ function rebootMenu() {
   elif [ "${REDEST}" == "shell" ]; then
     clear
     exit 0
+  elif [ "${REDEST}" == "init" ]; then
+    init.sh
+  elif [ "${REDEST}" == "network" ]; then
+    /etc/init.d/S41dhcpcd restart
+    arc.sh
   else
     rebootTo ${REDEST}
     exit 0
@@ -2047,10 +2054,9 @@ function governorSelection () {
     resp=$(cat ${TMP_PATH}/resp)
     [ -z "${resp}" ] && return
     CPUGOVERNOR=${resp}
+    writeConfigKey "arc.governor" "${CPUGOVERNOR}" "${USER_CONFIG_FILE}"
   else
     dialog --backtitle "$(backtitle)" --title "DSM Frequency Scaling" \
       --msgbox "CPU frequency scaling not supported!" 0 0
-    CPUGOVERNOR="performance"
   fi
-  writeConfigKey "arc.governor" "${CPUGOVERNOR}" "${USER_CONFIG_FILE}"
 }

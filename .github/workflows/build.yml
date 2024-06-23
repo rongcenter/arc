@@ -66,12 +66,6 @@ jobs:
           keep-count: 10
           keep-old-minor-releases: false
 
-      - name: Changelog
-        uses: Bullrich/generate-release-changelog@master
-        id: Changelog
-        env:
-          REPO: ${{ github.repository }}
-
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
         with:
@@ -140,6 +134,8 @@ jobs:
           getOffline "files/p3/configs"
           echo "Get Buildroot"
           getBuildroot "latest" "br"
+          echo "BR_VERSION=${TAG}" >> $GITHUB_ENV
+          echo "BUILD_TIME=$(date +'%Y-%m-%d %H:%M')" >> $GITHUB_ENV
 
           echo "OK"
 
@@ -234,17 +230,17 @@ jobs:
             ### Arc Patch Key:
             Decryption Key can be found in my Discord.
 
+            ### Build:
+            Time: ${{ env.BUILD_TIME }}
+
             ### Versions:
-            Buildroot: ${{ inputs.br_version }}
+            Buildroot: ${{ env.BR_VERSION }}
             Addons: ${{ env.ADDONSTAG }}
             Configs: ${{ env.CONFIGSTAG }}
             Modules: ${{ env.MODULESTAG }}
             Patches: ${{ env.PATCHESTAG }}
             Theme: ${{ env.THEMETAG }}
             LKM: ${{ env.LKMTAG }}
-
-            Changelog:
-              ${{ steps.Changelog.outputs.changelog }}
           artifacts: |
             arc-*.zip
             update.zip

@@ -43,7 +43,7 @@ initConfigKey "arc.custom" "false" "${USER_CONFIG_FILE}"
 initConfigKey "arc.directboot" "false" "${USER_CONFIG_FILE}"
 initConfigKey "arc.dsmlogo" "true" "${USER_CONFIG_FILE}"
 initConfigKey "arc.emmcboot" "false" "${USER_CONFIG_FILE}"
-initConfigKey "arc.governor" "" "${USER_CONFIG_FILE}"
+initConfigKey "arc.governor" "performance" "${USER_CONFIG_FILE}"
 initConfigKey "arc.hddsort" "false" "${USER_CONFIG_FILE}"
 initConfigKey "arc.ipv6" "false" "${USER_CONFIG_FILE}"
 initConfigKey "arc.kernel" "official" "${USER_CONFIG_FILE}"
@@ -108,8 +108,8 @@ for ETH in ${ETHX}; do
   fi
   NIC=$((${NIC} + 1))
 done
-/etc/init.d/S41dhcpcd restart >/dev/null 2>&1 || true
-sleep 5
+#/etc/init.d/S41dhcpcd restart >/dev/null 2>&1 || true
+#sleep 5
 ETHN=$(ls /sys/class/net/ 2>/dev/null | grep eth | wc -l)
 [ ${NIC} -ne ${ETHN} ] && echo -e "\033[1;31mWarning: NIC mismatch (NICs: ${NIC} | Real: ${ETHN})\033[0m"
 # Write NIC Amount to config
