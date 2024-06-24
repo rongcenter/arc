@@ -98,7 +98,6 @@ KERNEL="$(readConfigKey "arc.kernel" "${USER_CONFIG_FILE}")"
 KERNELLOAD="$(readConfigKey "arc.kernelload" "${USER_CONFIG_FILE}")"
 KERNELPANIC="$(readConfigKey "arc.kernelpanic" "${USER_CONFIG_FILE}")"
 ARC_KEY="$(readConfigKey "arc.key" "${USER_CONFIG_FILE}")"
-MACSYS="$(readConfigKey "arc.macsys" "${USER_CONFIG_FILE}")"
 ODP="$(readConfigKey "arc.odp" "${USER_CONFIG_FILE}")"
 OFFLINE="$(readConfigKey "arc.offline" "${USER_CONFIG_FILE}")"
 RD_COMPRESSED="$(readConfigKey "rd-compressed" "${USER_CONFIG_FILE}")"
@@ -394,8 +393,6 @@ function arcVersion() {
       [ "${MOD}" == "${ID}" ] && echo "N ${ID}.ko" >>"${USER_UP_PATH}/modulelist"
     done
   done < <(getAllModules "${PLATFORM}" "${KVERP}")
-  [ "${PLATFORM}" != "epyc7002" ] && echo "N cpufreq_conservative.ko" >>"${USER_UP_PATH}/modulelist"
-  [ "${PLATFORM}" != "epyc7002" ] && echo "N cpufreq_ondemand.ko" >>"${USER_UP_PATH}/modulelist"
   # Check for Only Version
   if [ "${ONLYVERSION}" == "true" ]; then
     # Build isn't done
@@ -559,6 +556,11 @@ function arcSettings() {
     if [ "${ACPISYS}" == "false" ]; then
       dialog --backtitle "$(backtitle)" --title "Arc Warning" \
         --msgbox "WARN: Your System doesn't have ACPI Support for CPU Frequency Scaling in DSM." 5 90
+    else
+      if [ "${PLATFORM}" != "epyc7002" ]; then
+        echo "N cpufreq_conservative.ko" >>"${USER_UP_PATH}/modulelist"
+        echo "N cpufreq_ondemand.ko" >>"${USER_UP_PATH}/modulelist"
+      fi
     fi
   fi
   EMMCBOOT="$(readConfigKey "arc.emmcboot" "${USER_CONFIG_FILE}")"
@@ -617,7 +619,6 @@ function arcSummary() {
   fi
   DIRECTBOOT="$(readConfigKey "arc.directboot" "${USER_CONFIG_FILE}")"
   KERNELLOAD="$(readConfigKey "arc.kernelload" "${USER_CONFIG_FILE}")"
-  MACSYS="$(readConfigKey "arc.macsys" "${USER_CONFIG_FILE}")"
   OFFLINE="$(readConfigKey "arc.offline" "${USER_CONFIG_FILE}")"
   ARCIPV6="$(readConfigKey "arc.ipv6" "${USER_CONFIG_FILE}")"
   HDDSORT="$(readConfigKey "arc.hddsort" "${USER_CONFIG_FILE}")"
@@ -639,7 +640,6 @@ function arcSummary() {
   SUMMARY+="\n"
   SUMMARY+="\n\Z4> Arc Information\Zn"
   SUMMARY+="\n>> Arc Patch: \Zb${ARCPATCH}\Zn"
-  SUMMARY+="\n>> MacSys: \Zb${MACSYS}\Zn"
   [ -n "${PORTMAP}" ] && SUMMARY+="\n>> SataPortmap: \Zb${PORTMAP}\Zn"
   [ -n "${DISKMAP}" ] && SUMMARY+="\n>> DiskIdxMap: \Zb${DISKMAP}\Zn"
   [ -n "${PORTREMAP}" ] && SUMMARY+="\n>> SataRemap: \Zb${PORTREMAP}\Zn"
@@ -973,8 +973,11 @@ else
         echo "d \"DSM Modules \" "                                                            >>"${TMP_PATH}/menu"
         echo "g \"DSM Frequency Scaling \" "                                                  >>"${TMP_PATH}/menu"
         echo "e \"DSM Version \" "                                                            >>"${TMP_PATH}/menu"
-        if [ ${SATACONTROLLER} -gt 0 ]; then
+        if [ "${DT}" == "false" ] && [ ${SATACONTROLLER} -gt 0 ]; then
           echo "S \"DSM Sata PortMap \" "                                                     >>"${TMP_PATH}/menu"
+        fi
+        if [ "${DT}" == "true" ]; then
+          echo "o \"DSM DTS Map \" "                                                          >>"${TMP_PATH}/menu"
         fi
         echo "P \"DSM StoragePanel Options\" "                                                >>"${TMP_PATH}/menu"
         echo "Q \"DSM SequentialIO Options\" "                                                >>"${TMP_PATH}/menu"
@@ -1009,6 +1012,7 @@ else
         echo "s \"Allow Downgrade \" "                                                        >>"${TMP_PATH}/menu"
         echo "t \"Change User Password \" "                                                   >>"${TMP_PATH}/menu"
         echo "N \"Add new User\" "                                                            >>"${TMP_PATH}/menu"
+        echo "D \"StaticIP \" "                                                               >>"${TMP_PATH}/menu"
         echo "J \"Reset DSM Network Config \" "                                               >>"${TMP_PATH}/menu"
         if [ "${PLATFORM}" == "epyc7002" ]; then
           echo "K \"Kernel: \Z4${KERNEL}\Zn \" "                                              >>"${TMP_PATH}/menu"
@@ -1019,7 +1023,6 @@ else
         echo "c \"IPv6 Boot Support: \Z4${ARCIPV6}\Zn \" "                                    >>"${TMP_PATH}/menu"
         echo "O \"Official Driver Priority: \Z4${ODP}\Zn \" "                                 >>"${TMP_PATH}/menu"
         echo "E \"eMMC Boot Support: \Z4${EMMCBOOT}\Zn \" "                                   >>"${TMP_PATH}/menu"
-        echo "o \"Switch MacSys: \Z4${MACSYS}\Zn \" "                                         >>"${TMP_PATH}/menu"
         echo "W \"RD Compression: \Z4${RD_COMPRESSED}\Zn \" "                                 >>"${TMP_PATH}/menu"
         echo "X \"Sata DOM: \Z4${SATADOM}\Zn \" "                                             >>"${TMP_PATH}/menu"
         echo "T \"Force enable SSH in DSM \" "                                                >>"${TMP_PATH}/menu"
@@ -1033,7 +1036,6 @@ else
     if [ "${DEVOPTS}" == "true" ]; then
       echo "= \"\Z4========= Loader =========\Zn \" "                                         >>"${TMP_PATH}/menu"
       echo "R \"Automated Mode: \Z4${CUSTOM}\Zn \" "                                          >>"${TMP_PATH}/menu"
-      echo "D \"Loader DHCP/StaticIP \" "                                                     >>"${TMP_PATH}/menu"
       echo "B \"Grep DSM Config from Backup \" "                                              >>"${TMP_PATH}/menu"
       echo "L \"Grep Logs from dbgutils \" "                                                  >>"${TMP_PATH}/menu"
       echo "w \"Reset Loader to Defaults\" "                                                  >>"${TMP_PATH}/menu"
@@ -1080,6 +1082,7 @@ else
       g) governorMenu; NEXT="g" ;;
       e) ONLYVERSION="true" && arcVersion; NEXT="e" ;;
       S) storageMenu; NEXT="S" ;;
+      o) dtsMenu; NEXT="o" ;;
       P) storagepanelMenu; NEXT="P" ;;
       Q) sequentialIOMenu; NEXT="Q" ;;
       p) ONLYPATCH="true" && arcPatch; NEXT="p" ;;
@@ -1179,12 +1182,6 @@ else
         BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         NEXT="E"
         ;;
-      o) [ "${MACSYS}" == "hardware" ] && MACSYS='custom' || MACSYS='hardware'
-        writeConfigKey "arc.macsys" "${MACSYS}" "${USER_CONFIG_FILE}"
-        writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
-        BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
-        NEXT="o"
-        ;;
       W) [ "${RD_COMPRESSED}" == "true" ] && RD_COMPRESSED='false' || RD_COMPRESSED='true'
         writeConfigKey "rd-compressed" "${RD_COMPRESSED}" "${USER_CONFIG_FILE}"
         writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
@@ -1211,7 +1208,7 @@ else
       L) greplogs; NEXT="L" ;;
       T) forcessh; NEXT="T" ;;
       C) cloneLoader; NEXT="C" ;;
-      F) formatdisks; NEXT="F" ;;
+      F) formatDisks; NEXT="F" ;;
       G) package; NEXT="G" ;;
       # Misc Settings
       x) backupMenu; NEXT="x" ;;
