@@ -266,6 +266,7 @@ function cmdlineMenu() {
         MSG+=" * \Z4pcie_port_pm=off\Zn\n    Disable the power management of the PCIe port.\n"
         MSG+=" * \Z4pci=realloc=off\Zn\n    Disable reallocating PCI bridge resources.\n"
         MSG+=" * \Z4libata.force=noncq\Zn\n    Disable NCQ for all SATA ports.\n"
+        MSG+=" * \Z4intel_pstate=disable\Zn\n    Switch Intel P-State to ACPI.\n"
         MSG+=" * \Z4acpi=force\Zn\n    Force enables ACPI.\n"
         MSG+=" * \Z4i915.enable_guc=2\Zn\n    Enable the GuC firmware on Intel graphics hardware.(value: 1,2 or 3)\n"
         MSG+=" * \Z4i915.max_vfs=7\Zn\n     Set the maximum number of virtual functions (VFs) that can be created for Intel graphics hardware.\n"
@@ -1069,11 +1070,22 @@ function sysinfo() {
   TEXT+="\n\Z4> System: ${MACHINE} | ${BOOTSYS}\Zn"
   TEXT+="\n  Vendor: \Zb${VENDOR}\Zn"
   TEXT+="\n  CPU: \Zb${CPU}\Zn"
+  if [ $(lspci -d ::300 | wc -l) -gt 0 ]; then
+    for PCI in $(lspci -d ::300 | awk '{print $1}'); do
+      GPUNAME=$(lspci -s "${PCI}" | sed "s/\ .*://" | awk '{$1=""}1' | awk '{$1=$1};1')
+      TEXT+="\n  iGPU: \Zb${GPUNAME}\Zn"
+    done
+  elif [ $(lspci -d ::380 | wc -l) -gt 0 ]; then
+    for PCI in $(lspci -d ::380 | awk '{print $1}'); do
+      GPUNAME=$(lspci -s "${PCI}" | sed "s/\ .*://" | awk '{$1=""}1' | awk '{$1=$1};1')
+      TEXT+="\n  GPU: \Zb${GPUNAME}\Zn"
+    done
+  fi
   TEXT+="\n  Memory: \Zb$((${RAMTOTAL}))GB\Zn"
   TEXT+="\n  AES | ACPI: \Zb${AESSYS} | ${ACPISYS}\Zn"
-  TEXT+="\n  Date: \Zb$(date)\Zn"
+  TEXT+="\n  Date/Time: \Zb$(date)\Zn"
   TEXT+="\n"
-  TEXT+="\n\Z4> Network: ${ETHN} NIC\Zn"
+  TEXT+="\n\Z4> Network: ${ETHN} NIC\Zn\n"
   for ETH in ${ETHX}; do
     COUNT=0
     DRIVER=$(ls -ld /sys/class/net/${ETH}/device/driver 2>/dev/null | awk -F '/' '{print $NF}')
@@ -1104,7 +1116,7 @@ function sysinfo() {
       fi
       sleep 1
     done
-    TEXT+="\n\Zb$(lspci -s ${NETBUS} -nnk)\Zn\n"
+    TEXT+="\n\Zb$(lspci -s ${NETBUS} -nnk | awk '{$1=""}1' | awk '{$1=$1};1')\Zn\n"
   done
   # Print Config Informations
   TEXT+="\n"
@@ -1145,7 +1157,7 @@ function sysinfo() {
   if [ $(lspci -d ::106 | wc -l) -gt 0 ]; then
     TEXT+="\n  SATA Controller:\n"
     for PCI in $(lspci -d ::106 | awk '{print $1}'); do
-      NAME=$(lspci -s "${PCI}" | sed "s/\ .*://")
+      NAME=$(lspci -s "${PCI}" | sed "s/\ .*://" | awk '{$1=""}1' | awk '{$1=$1};1')
       TEXT+="\Zb  ${NAME}\Zn\n  Ports: "
       PORTS=$(ls -l /sys/class/scsi_host | grep "${PCI}" | awk -F'/' '{print $NF}' | sed 's/host//' | sort -n)
       for P in ${PORTS}; do
@@ -1167,7 +1179,7 @@ function sysinfo() {
   if [ $(lspci -d ::107 | wc -l) -gt 0 ]; then
     TEXT+="\n  SAS Controller:\n"
     for PCI in $(lspci -d ::107 | awk '{print $1}'); do
-      NAME=$(lspci -s "${PCI}" | sed "s/\ .*://")
+      NAME=$(lspci -s "${PCI}" | sed "s/\ .*://" | awk '{$1=""}1' | awk '{$1=$1};1')
       PORT=$(ls -l /sys/class/scsi_host | grep "${PCI}" | awk -F'/' '{print $NF}' | sed 's/host//' | sort -n)
       PORTNUM=$(lsscsi -b | grep -v - | grep "\[${PORT}:" | wc -l)
       TEXT+="\Zb  ${NAME}\Zn\n  Drives: ${PORTNUM}\n"
@@ -1177,7 +1189,7 @@ function sysinfo() {
   if [ $(lspci -d ::104 | wc -l) -gt 0 ]; then
     TEXT+="\n  Raid Controller:\n"
     for PCI in $(lspci -d ::104 | awk '{print $1}'); do
-      NAME=$(lspci -s "${PCI}" | sed "s/\ .*://")
+      NAME=$(lspci -s "${PCI}" | sed "s/\ .*://" | awk '{$1=""}1' | awk '{$1=$1};1')
       PORT=$(ls -l /sys/class/scsi_host | grep "${PCI}" | awk -F'/' '{print $NF}' | sed 's/host//' | sort -n)
       PORTNUM=$(lsscsi -b | grep -v - | grep "\[${PORT}:" | wc -l)
       TEXT+="\Zb  ${NAME}\Zn\n  Drives: ${PORTNUM}\n"
@@ -1187,7 +1199,7 @@ function sysinfo() {
   if [ $(lspci -d ::100 | wc -l) -gt 0 ]; then
     TEXT+="\n  SCSI Controller:\n"
     for PCI in $(lspci -d ::100 | awk '{print $1}'); do
-      NAME=$(lspci -s "${PCI}" | sed "s/\ .*://")
+      NAME=$(lspci -s "${PCI}" | sed "s/\ .*://" | awk '{$1=""}1' | awk '{$1=$1};1')
       PORT=$(ls -l /sys/class/scsi_host | grep "${PCI}" | awk -F'/' '{print $NF}' | sed 's/host//' | sort -n)
       PORTNUM=$(lsscsi -b | grep -v - | grep "\[${PORT}:" | wc -l)
       TEXT+="\Zb  ${NAME}\Zn\n  Drives: ${PORTNUM}\n"
@@ -1197,7 +1209,7 @@ function sysinfo() {
   if [[ -d "/sys/class/scsi_host" && $(ls -l /sys/class/scsi_host | grep usb | wc -l) -gt 0 ]]; then
     TEXT+="\n  USB Controller:\n"
     for PCI in $(lspci -d ::c03 | awk '{print $1}'); do
-      NAME=$(lspci -s "${PCI}" | sed "s/\ .*://")
+      NAME=$(lspci -s "${PCI}" | sed "s/\ .*://" | awk '{$1=""}1' | awk '{$1=$1};1')
       PORT=$(ls -l /sys/class/scsi_host | grep "${PCI}" | awk -F'/' '{print $NF}' | sed 's/host//' | sort -n)
       PORTNUM=$(lsscsi -b | grep -v - | grep "\[${PORT}:" | wc -l)
       [ ${PORTNUM} -eq 0 ] && continue
@@ -1208,7 +1220,7 @@ function sysinfo() {
   if [[ -d "/sys/class/mmc_host" && $(ls -l /sys/class/mmc_host | grep mmc_host | wc -l) -gt 0 ]]; then
     TEXT+="\n  MMC Controller:\n"
     for PCI in $(lspci -d ::805 | awk '{print $1}'); do
-      NAME=$(lspci -s "${PCI}" | sed "s/\ .*://")
+      NAME=$(lspci -s "${PCI}" | sed "s/\ .*://" | awk '{$1=""}1' | awk '{$1=$1};1')
       PORTNUM=$(ls -l /sys/class/mmc_host | grep "${PCI}" | wc -l)
       PORTNUM=$(ls -l /sys/block/mmc* | grep "${PCI}" | wc -l)
       [ ${PORTNUM} -eq 0 ] && continue
@@ -1219,7 +1231,7 @@ function sysinfo() {
   if [ $(lspci -d ::108 | wc -l) -gt 0 ]; then
     TEXT+="\n  NVMe Controller:\n"
     for PCI in $(lspci -d ::108 | awk '{print $1}'); do
-      NAME=$(lspci -s "${PCI}" | sed "s/\ .*://")
+      NAME=$(lspci -s "${PCI}" | sed "s/\ .*://" | awk '{$1=""}1' | awk '{$1=$1};1')
       PORT=$(ls -l /sys/class/nvme | grep "${PCI}" | awk -F'/' '{print $NF}' | sed 's/nvme//' | sort -n)
       PORTNUM=$(lsscsi -b | grep -v - | grep "\[N:${PORT}:" | wc -l)
       TEXT+="\Zb  ${NAME}\Zn\n  Drives: ${PORTNUM}\n"
@@ -1230,7 +1242,7 @@ function sysinfo() {
   [ -f "${TMP_PATH}/diag" ] && rm -f "${TMP_PATH}/diag" >/dev/null
   echo -e "${TEXT}" >"${TMP_PATH}/diag"
   dialog --backtitle "$(backtitle)" --colors --title "Sysinfo" \
-    --help-button --help-label "Networkdiag" --extra-button --extra-label "Upload" \
+    --ok-label "Exit" --help-button --help-label "Networkdiag" --extra-button --extra-label "Upload" \
     --msgbox "${TEXT}" 0 0
   RET=$?
   case ${RET} in
@@ -1322,6 +1334,7 @@ function credits() {
   TEXT+="\n\Z4> Arc Loader:\Zn"
   TEXT+="\n  Github: \Zbhttps://github.com/AuxXxilium\Zn"
   TEXT+="\n  Website: \Zbhttps://auxxxilium.tech\Zn"
+  TEXT+="\n  Wiki: \Zbhttps://auxxxilium.tech/wiki\Zn"
   TEXT+="\n"
   TEXT+="\n\Z4>> Developer:\Zn"
   TEXT+="\n   Arc Loader: \ZbAuxXxilium / Fulcrum\Zn"
@@ -1329,15 +1342,14 @@ function credits() {
   TEXT+="\n\Z4>> Based on:\Zn"
   TEXT+="\n   Redpill: \ZbTTG / Pocopico\Zn"
   TEXT+="\n   ARPL/RR: \Zbfbelavenuto / wjz304\Zn"
-  TEXT+="\n   NVMe System: \Zbjim3ma\Zn"
-  TEXT+="\n   System: \ZbBuildroot 2023.08.x\Zn"
+  TEXT+="\n   System: \ZbBuildroot 2024.02.x\Zn"
   TEXT+="\n   DSM: \ZbSynology Inc.\Zn"
   TEXT+="\n"
   TEXT+="\n\Z4>> Note:\Zn"
-  TEXT+="\n   Arc and all Parts are OpenSource."
+  TEXT+="\n   Arc and all Parts of it are OpenSource."
   TEXT+="\n   Commercial use is not permitted!"
   TEXT+="\n   This Loader is FREE and it is forbidden"
-  TEXT+="\n   to sell Arc or Parts of this."
+  TEXT+="\n   to sell Arc or Parts of it."
   TEXT+="\n"
   dialog --backtitle "$(backtitle)" --colors --title "Credits" \
     --msgbox "${TEXT}" 0 0
@@ -1353,7 +1365,7 @@ function staticIPMenu() {
     IPR="$(readConfigKey "network.${MACR}" "${USER_CONFIG_FILE}")"
     IFS='/' read -r -a IPRA <<<"$IPR"
 
-    MSG="Set to ${ETH}(${MACR}): (Delete if empty)"
+    MSG="$(printf "Set to %s: (Delete if empty)" "${ETH}(${MACR})")"
     while true; do
       dialog --backtitle "$(backtitle)" --title "StaticIP" \
         --form "${MSG}" 10 60 4 "address" 1 1 "${IPRA[0]}" 1 9 36 16 "netmask" 2 1 "${IPRA[1]}" 2 9 36 16 "gateway" 3 1 "${IPRA[2]}" 3 9 36 16 "dns" 4 1 "${IPRA[3]}" 4 9 36 16 \
@@ -1380,6 +1392,7 @@ function staticIPMenu() {
             echo "nameserver ${dnsname:-${gateway}}" >>/etc/resolv.conf
           fi
           writeConfigKey "network.${MACR}" "${address}/${netmask}/${gateway}/${dnsname}" "${USER_CONFIG_FILE}"
+          IP="$(getIP)"
           sleep 1
         fi
         writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
@@ -2017,7 +2030,7 @@ function governorSelection () {
   rm -f "${TMP_PATH}/opts" >/dev/null
   touch "${TMP_PATH}/opts"
   CPUFREQSUPPORT=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor)
-  if [ -n "${CPUFREQSUPPORT}" ]; then
+  if [ -n "${CPUFREQSUPPORT}" ] || [ "${ACPISYS}" == "true" ]; then
     # Selectable CPU governors
     [ "${PLATFORM}" == "epyc7002" ] && echo -e "schedutil \"use schedutil to scale frequency *\"" >>"${TMP_PATH}/opts"
     [ "${PLATFORM}" != "epyc7002" ] && echo -e "ondemand \"use ondemand to scale frequency *\"" >>"${TMP_PATH}/opts"

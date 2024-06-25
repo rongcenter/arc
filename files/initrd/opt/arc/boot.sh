@@ -45,7 +45,7 @@ MODELID="$(readConfigKey "modelid" "${USER_CONFIG_FILE}")"
 PRODUCTVER="$(readConfigKey "productver" "${USER_CONFIG_FILE}")"
 LKM="$(readConfigKey "lkm" "${USER_CONFIG_FILE}")"
 CPU="$(echo $(cat /proc/cpuinfo 2>/dev/null | grep 'model name' | uniq | awk -F':' '{print $2}'))"
-RAMTOTAL=$(awk '/MemTotal:/ {printf "%.0f", $2 / 1024}' /proc/meminfo 2>/dev/null)
+RAMTOTAL=$(awk '/MemTotal:/ {printf "%.0f", $2 / 1024 / 1024}' /proc/meminfo 2>/dev/null)
 VENDOR=$(dmesg 2>/dev/null | grep -i "DMI:" | sed 's/\[.*\] DMI: //i')
 
 echo -e "\033[1;37mDSM:\033[0m"
@@ -54,9 +54,9 @@ echo -e "Version: \033[1;37m${PRODUCTVER}\033[0m"
 echo -e "LKM: \033[1;37m${LKM}\033[0m"
 echo
 echo -e "\033[1;37mSystem:\033[0m"
-echo -e "VENDOR: \033[1;37m${VENDOR}\033[0m"
+echo -e "Vendor: \033[1;37m${VENDOR}\033[0m"
 echo -e "CPU: \033[1;37m${CPU}\033[0m"
-echo -e "MEM: \033[1;37m${RAMTOTAL}MB\033[0m"
+echo -e "Memory: \033[1;37m${RAMTOTAL} GB (usable)\033[0m"
 echo
 
 if ! readConfigMap "addons" "${USER_CONFIG_FILE}" | grep -q nvmesystem; then
@@ -76,7 +76,6 @@ VID="$(readConfigKey "vid" "${USER_CONFIG_FILE}")"
 PID="$(readConfigKey "pid" "${USER_CONFIG_FILE}")"
 SN="$(readConfigKey "arc.sn" "${USER_CONFIG_FILE}")"
 KERNELPANIC="$(readConfigKey "arc.kernelpanic" "${USER_CONFIG_FILE}")"
-EMMCBOOT="$(readConfigKey "arc.emmcboot" "${USER_CONFIG_FILE}")"
 DT="$(readConfigKey "platforms.${PLATFORM}.dt" "${P_FILE}")"
 KVER="$(readConfigKey "platforms.${PLATFORM}.productvers.[${PRODUCTVER}].kver" "${P_FILE}")"
 
@@ -152,8 +151,8 @@ if echo "purley broadwellnkv2" | grep -wq "${PLATFORM}"; then
 fi
 
 # Cmdline NIC Settings
-MAC1="$(readConfigKey "mac.eth0" "${USER_CONFIG_FILE}")"
-MAC2="$(readConfigKey "mac.eth1" "${USER_CONFIG_FILE}")"
+MAC1="$(readConfigKey "arc.eth0" "${USER_CONFIG_FILE}")"
+MAC2="$(readConfigKey "arc.eth1" "${USER_CONFIG_FILE}")"
 CMDLINE['netif_num']="0"
 [[ -z "${MAC1}" && -n "${MAC2}" ]] && MAC1=${MAC2} && MAC2="" # Sanity check
 [ -n "${MAC1}" ] && CMDLINE['mac1']="${MAC1}" && CMDLINE['netif_num']="1"

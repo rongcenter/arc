@@ -64,7 +64,6 @@ initConfigKey "device.externalcontroller" "false" "${USER_CONFIG_FILE}"
 initConfigKey "keymap" "" "${USER_CONFIG_FILE}"
 initConfigKey "layout" "" "${USER_CONFIG_FILE}"
 initConfigKey "lkm" "prod" "${USER_CONFIG_FILE}"
-initConfigKey "mac" "{}" "${USER_CONFIG_FILE}"
 initConfigKey "modules" "{}" "${USER_CONFIG_FILE}"
 initConfigKey "model" "" "${USER_CONFIG_FILE}"
 initConfigKey "modelid" "" "${USER_CONFIG_FILE}"
@@ -74,7 +73,6 @@ initConfigKey "productver" "" "${USER_CONFIG_FILE}"
 initConfigKey "ramdisk-hash" "" "${USER_CONFIG_FILE}"
 initConfigKey "rd-compressed" "false" "${USER_CONFIG_FILE}"
 initConfigKey "satadom" "2" "${USER_CONFIG_FILE}"
-initConfigKey "static" "{}" "${USER_CONFIG_FILE}"
 initConfigKey "synoinfo" "{}" "${USER_CONFIG_FILE}"
 initConfigKey "time" "{}" "${USER_CONFIG_FILE}"
 initConfigKey "zimage-hash" "" "${USER_CONFIG_FILE}"
@@ -83,6 +81,7 @@ initConfigKey "zimage-hash" "" "${USER_CONFIG_FILE}"
 ETHX=$(ls /sys/class/net/ 2>/dev/null | grep eth) # real network cards list
 if arrayExistItem "sortnetif:" $(readConfigMap "addons" "${USER_CONFIG_FILE}"); then
   _sort_netif "$(readConfigKey "addons.sortnetif" "${USER_CONFIG_FILE}")"
+  /etc/init.d/S41dhcpcd restart
 fi
 # Read/Write IP/Mac config
 for ETH in ${ETHX}; do
@@ -102,7 +101,7 @@ for ETH in ${ETHX}; do
     sleep 1
   fi
   [ "${ETH::3}" = "eth" ] && ethtool -s ${ETH} wol g 2>/dev/null || true
-  initConfigKey "mac.${ETH}" "${MACR}" "${USER_CONFIG_FILE}"
+  initConfigKey "arc.${ETH}" "${MACR}" "${USER_CONFIG_FILE}"
 done
 ETHN=$(ls /sys/class/net/ 2>/dev/null | grep eth | wc -l)
 writeConfigKey "device.nic" "${ETHN}" "${USER_CONFIG_FILE}"

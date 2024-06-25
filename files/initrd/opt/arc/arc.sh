@@ -20,9 +20,9 @@ RAMTOTAL=$(awk '/MemTotal:/ {printf "%.0f", $2 / 1024 / 1024}' /proc/meminfo 2>/
 
 # Check for Hypervisor
 if grep -q "^flags.*hypervisor.*" /proc/cpuinfo; then
-  MACHINE=$(lscpu | grep Hypervisor | awk '{print $3}')
+  MACHINE="$(lscpu | grep Hypervisor | awk '{print $3}')" # KVM or VMware
 else
-  MACHINE=NATIVE
+  MACHINE="NATIVE"
 fi
 # Check for AES and ACPI Support
 if ! grep -q "^flags.*aes.*" /proc/cpuinfo; then
@@ -97,7 +97,6 @@ HDDSORT="$(readConfigKey "arc.hddsort" "${USER_CONFIG_FILE}")"
 KERNEL="$(readConfigKey "arc.kernel" "${USER_CONFIG_FILE}")"
 KERNELLOAD="$(readConfigKey "arc.kernelload" "${USER_CONFIG_FILE}")"
 KERNELPANIC="$(readConfigKey "arc.kernelpanic" "${USER_CONFIG_FILE}")"
-ARC_KEY="$(readConfigKey "arc.key" "${USER_CONFIG_FILE}")"
 ODP="$(readConfigKey "arc.odp" "${USER_CONFIG_FILE}")"
 OFFLINE="$(readConfigKey "arc.offline" "${USER_CONFIG_FILE}")"
 RD_COMPRESSED="$(readConfigKey "rd-compressed" "${USER_CONFIG_FILE}")"
@@ -203,23 +202,17 @@ function arcModel() {
         ARCCONF="$(readConfigKey "${M}.serial" "${S_FILE}" 2>/dev/null)"
         ARC=""
         BETA=""
-        [ -n "${ARCCONF}" ] && ARC="x"
-        CPU="Intel"
-        [[ "${A}" == "r1000" || "${A}" == "v1000" || "${A}" == "epyc7002" ]] && CPU="AMD"
-        IGPUS=""
-        [[ "${A}" == "apollolake" || "${A}" == "geminilake" || "${A}" == "epyc7002" ]] && IGPUS="x"
-        HBAS="x"
-        [ "${DT}" == "true" ] && HBAS=""
-        [ "${M}" == "SA6400" ] && HBAS="x"
-        USBS=""
-        [ "${DT}" == "false" ] && USBS="x"
-        M_2_CACHE="x"
-        [[ "${M}" == "DS918+" || "${M}" == "DS1019+" || "${M}" == "DS1621xs+" || "${M}" == "RS1619xs+" ]] && M_2_CACHE="+"
-        [[ "${M}" == "DS220+" ||  "${M}" == "DS224+" ]] && M_2_CACHE=""
-        M_2_STORAGE="+"
-        [ "${DT}" == "false" ] && M_2_STORAGE=""
-        [[ "${M}" == "DS220+" || "${M}" == "DS224+" ]] && M_2_STORAGE=""
+        [ -n "${ARCCONF}" ] && ARC="x" || ARC=""
         [ "${DT}" == "true" ] && DTS="x" || DTS=""
+        [[ "${A}" == "r1000" || "${A}" == "v1000" || "${A}" == "epyc7002" ]] && CPU="AMD" || CPU="Intel"
+        [[ "${A}" == "apollolake" || "${A}" == "geminilake" || "${A}" == "epyc7002" ]] && IGPUS="x" || IGPUS=""
+        [ "${DT}" == "true" ] && HBAS="" || HBAS="x"
+        [ "${M}" == "SA6400" ] && HBAS="x"
+        [ "${DT}" == "false" ] && USBS="x" || USBS=""
+        [[ "${M}" == "DS918+" || "${M}" == "DS1019+" || "${M}" == "DS1621xs+" || "${M}" == "RS1619xs+" ]] && M_2_CACHE="+" || M_2_CACHE="x"
+        [[ "${M}" == "DS220+" ||  "${M}" == "DS224+" ]] && M_2_CACHE=""
+        [ "${DT}" == "false" ] && M_2_STORAGE="" || M_2_STORAGE="+"
+        [[ "${M}" == "DS220+" || "${M}" == "DS224+" ]] && M_2_STORAGE=""
         # Check id model is compatible with CPU
         if [ ${RESTRICT} -eq 1 ]; then
           for F in "${FLAGS}"; do
@@ -251,13 +244,13 @@ function arcModel() {
         dialog --backtitle "$(backtitle)" --title "Arc DSM Model" --colors \
           --cancel-label "Show all" --help-button --help-label "Exit" \
           --extra-button --extra-label "Info" \
-          --menu "Supported Models for Loader (x = supported / + = need Addons) | Syno Models can have faulty Values.\n$(printf "\Zb%-16s\Zn \Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "CPU" "Platform" "DT" "Arc" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 120 0 \
+          --menu "Supported Models for your Hardware (x = supported / + = need Addons)\n$(printf "\Zb%-16s\Zn \Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "CPU" "Platform" "DT" "Arc" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 120 0 \
           --file "${TMP_PATH}/menu" 2>"${TMP_PATH}/resp"
       else
         dialog --backtitle "$(backtitle)" --title "DSM Model" --colors \
           --cancel-label "Show all" --help-button --help-label "Exit" \
           --extra-button --extra-label "Info" \
-          --menu "Supported Models for Loader (x = supported / + = need Addons)\n$(printf "\Zb%-16s\Zn \Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "CPU" "Platform" "DT" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 120 0 \
+          --menu "Supported Models for your Hardware (x = supported / + = need Addons) | Syno Models can have faulty Values.\n$(printf "\Zb%-16s\Zn \Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "CPU" "Platform" "DT" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 120 0 \
           --file "${TMP_PATH}/menu" 2>"${TMP_PATH}/resp"
       fi
       RET=$?
@@ -521,7 +514,7 @@ function arcSettings() {
   fi
   # Check for Custom Build
   if [ "${CUSTOM}" == "false" ]; then
-    if [ "${MACHINE}" == "NATIVE" ]; then
+    if [ "${ACPISYS}" == "true" ]; then
       # Select Governor for DSM
       dialog --backtitle "$(backtitle)" --colors --title "DSM Frequency Scaling" \
         --infobox "Generating Governor Table..." 3 40
@@ -545,17 +538,17 @@ function arcSettings() {
     DEVICENIC="$(readConfigKey "device.nic" "${USER_CONFIG_FILE}")"
     if [ ${DEVICENIC} -gt 8 ]; then
       dialog --backtitle "$(backtitle)" --title "Arc Warning" \
-        --msgbox "WARN: You have more then 8 Ethernet Ports. There are only 8 supported by DSM." 5 90
+        --msgbox "WARN: You have more then 8 Ethernet Ports. Only 8 supported by DSM." 5 80
     fi
     # Check for AES
     if [ "${AESSYS}" == "false" ]; then
       dialog --backtitle "$(backtitle)" --title "Arc Warning" \
-        --msgbox "WARN: Your System doesn't have AES Support for Hardwareencryption in DSM." 5 90
+        --msgbox "WARN: Your System doesn't support Hardwareencryption in DSM. (AES)" 5 80
     fi
     # Check for ACPI
     if [ "${ACPISYS}" == "false" ]; then
       dialog --backtitle "$(backtitle)" --title "Arc Warning" \
-        --msgbox "WARN: Your System doesn't have ACPI Support for CPU Frequency Scaling in DSM." 5 90
+        --msgbox "WARN: Your System doesn't support CPU Frequency Scaling in DSM. (ACPI)" 5 80
     else
       if [ "${PLATFORM}" != "epyc7002" ]; then
         echo "N cpufreq_conservative.ko" >>"${USER_UP_PATH}/modulelist"
@@ -950,12 +943,16 @@ else
     if [ -z "${ARC_KEY}" ]; then
       echo "0 \"Decrypt Arc Patch \" "                                                        >>"${TMP_PATH}/menu"
     fi
-    echo "1 \"Choose Model \" "                                                               >>"${TMP_PATH}/menu"
-    if [ "${CONFDONE}" == "true" ]; then
-      echo "2 \"Build Loader \" "                                                             >>"${TMP_PATH}/menu"
-    fi
-    if [ "${BUILDDONE}" == "true" ]; then
-      echo "3 \"Boot Loader \" "                                                              >>"${TMP_PATH}/menu"
+    if [ "${ARCPATCH}" == "true" ] && [ -z "ARC_KEY" ]; then
+      echo "# \"Please decrypt first \" "                                                     >>"${TMP_PATH}/menu"
+    else
+      echo "1 \"Choose Model \" "                                                             >>"${TMP_PATH}/menu"
+      if [ "${CONFDONE}" == "true" ]; then
+        echo "2 \"Build Loader \" "                                                           >>"${TMP_PATH}/menu"
+      fi
+      if [ "${BUILDDONE}" == "true" ]; then
+        echo "3 \"Boot Loader \" "                                                            >>"${TMP_PATH}/menu"
+      fi
     fi
     echo "= \"\Z4========== Info ==========\Zn \" "                                           >>"${TMP_PATH}/menu"
     echo "a \"Sysinfo \" "                                                                    >>"${TMP_PATH}/menu"
