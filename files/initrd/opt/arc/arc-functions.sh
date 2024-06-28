@@ -1060,6 +1060,7 @@ function sysinfo() {
   [ -d /sys/firmware/efi ] && BOOTSYS="UEFI" || BOOTSYS="BIOS"
   # Get System Informations
   CPU=$(echo $(cat /proc/cpuinfo 2>/dev/null | grep 'model name' | uniq | awk -F':' '{print $2}'))
+  SECURE=$(dmesg 2>/dev/null | grep -i "Secure Boot" | awk -F'] ' '{print $2}')
   VENDOR=$(dmesg 2>/dev/null | grep -i "DMI:" | sed 's/\[.*\] DMI: //i')
   ETHX="$(ls /sys/class/net/ 2>/dev/null | grep eth)"
   ETHN="${#ETHX}"
@@ -1119,6 +1120,7 @@ function sysinfo() {
   TEXT+="\n  Memory: \Zb$((${RAMTOTAL}))GB\Zn"
   TEXT+="\n  AES | ACPI: \Zb${AESSYS} | ${ACPISYS}\Zn"
   TEXT+="\n  CPU Scaling: \Zb${CPUFREQ}\Zn"
+  TEXT+="\n  Secure Boot: \Zb${SECURE}\Zn"
   TEXT+="\n  Date/Time: \Zb$(date)\Zn"
   TEXT+="\n"
   TEXT+="\n\Z4> Network: ${ETHN} NIC\Zn\n"
@@ -1914,34 +1916,32 @@ function satadomMenu() {
 function decryptMenu() {
   if [ -f "${S_FILE_ENC}" ]; then
     CONFIGSVERSION=$(cat "${MODEL_CONFIG_PATH}/VERSION")
+    cp -f "${S_FILE}" "${S_FILE}.bak"
     dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
       --inputbox "Enter Decryption Key for ${CONFIGSVERSION}" 7 40 2>"${TMP_PATH}/resp"
     [ $? -ne 0 ] && return
     ARC_KEY=$(cat "${TMP_PATH}/resp")
-    if [ -n "${ARC_KEY}" ]; then
-      if openssl enc -in "${S_FILE_ENC}" -out "${S_FILE_ARC}" -d -aes-256-cbc -k "${ARC_KEY}" 2>/dev/null; then
-        dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
-          --msgbox "Decrypt successful: You can use Arc Patch." 5 50
-        mv -f "${S_FILE}" "${S_FILE}.bak"
-        mv -f "${S_FILE_ARC}" "${S_FILE}"
-        writeConfigKey "arc.key" "${ARC_KEY}" "${USER_CONFIG_FILE}"
-      else
-        mv -f "${S_FILE}.bak" "${S_FILE}"
-        dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
-          --msgbox "Decrypt failed: Wrong Key for this Version." 5 50
-        writeConfigKey "arc.key" "" "${USER_CONFIG_FILE}"
-      fi
-    else
+    if openssl enc -in "${S_FILE_ENC}" -out "${S_FILE_ARC}" -d -aes-256-cbc -k "${ARC_KEY}" 2>/dev/null; then
       dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
-        --msgbox "Decrypt failed: Please enter a Key." 5 50
+        --msgbox "Decrypt successful: You can use Arc Patch." 5 50
+      cp -f "${S_FILE_ARC}" "${S_FILE}"
+      writeConfigKey "arc.key" "${ARC_KEY}" "${USER_CONFIG_FILE}"
+      writeConfigKey "arc.confdone" "false" "${USER_CONFIG_FILE}"
+      CONFDONE="$(readConfigKey "arc.confdone" "${USER_CONFIG_FILE}")"
+      writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
+      BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
+    else
+      cp -f "${S_FILE}.bak" "${S_FILE}"
+      dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
+        --msgbox "Decrypt failed: Wrong Key for this Version." 5 50
       writeConfigKey "arc.key" "" "${USER_CONFIG_FILE}"
+      writeConfigKey "arc.confdone" "false" "${USER_CONFIG_FILE}"
+      CONFDONE="$(readConfigKey "arc.confdone" "${USER_CONFIG_FILE}")"
+      writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
+      BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
     fi
   fi
   ARC_KEY="$(readConfigKey "arc.key" "${USER_CONFIG_FILE}")"
-  MODEL="$(readConfigKey "model" "${USER_CONFIG_FILE}")"
-  if [ -n "${MODEL}" ]; then
-    ARCCONF="$(readConfigKey "${MODEL}.serial" "${S_FILE}" 2>/dev/null)"
-  fi
   return
 }
 

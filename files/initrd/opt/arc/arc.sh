@@ -35,7 +35,8 @@ if ! grep -q "^flags.*acpi.*" /proc/cpuinfo; then
 else
   ACPISYS="true"
 fi
-if $(ls -ltr /sys/devices/system/cpu/cpufreq/* 2>/dev/null | wc -l) -gt 0; then
+CPUFREQUENCIES=$(ls -ltr /sys/devices/system/cpu/cpufreq/* 2>/dev/null | wc -l)
+if [ ${CPUFREQUENCIES} -gt 0 ]; then
   CPUFREQ="true"
 else
   CPUFREQ="false"
@@ -209,7 +210,6 @@ function arcModel() {
         BETA=""
         [ -n "${ARCCONF}" ] && ARC="x" || ARC=""
         [ "${DT}" == "true" ] && DTS="x" || DTS=""
-        [[ "${A}" == "r1000" || "${A}" == "v1000" || "${A}" == "epyc7002" ]] && CPU="AMD" || CPU="Intel"
         [[ "${A}" == "apollolake" || "${A}" == "geminilake" || "${A}" == "epyc7002" ]] && IGPUS="x" || IGPUS=""
         [ "${DT}" == "true" ] && HBAS="" || HBAS="x"
         [ "${M}" == "SA6400" ] && HBAS="x"
@@ -240,22 +240,22 @@ function arcModel() {
         [ -z "$(grep -w "${M}" "${S_FILE}")" ] && BETA="Syno" || BETA="Arc"
         [ -z "$(grep -w "${A}" "${P_FILE}")" ] && COMPATIBLE=0
         if [ -n "${ARC_KEY}" ]; then
-          [ ${COMPATIBLE} -eq 1 ] && echo -e "${M} \"\t$(printf "\Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "${CPU}" "${A}" "${DTS}" "${ARC}" "${IGPUS}" "${HBAS}" "${M_2_CACHE}" "${M_2_STORAGE}" "${USBS}" "${BETA}")\" ">>"${TMP_PATH}/menu"
+          [ ${COMPATIBLE} -eq 1 ] && echo -e "${M} \"\t$(printf "\Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "${A}" "${DTS}" "${ARC}" "${IGPUS}" "${HBAS}" "${M_2_CACHE}" "${M_2_STORAGE}" "${USBS}" "${BETA}")\" ">>"${TMP_PATH}/menu"
         else
-          [ ${COMPATIBLE} -eq 1 ] && echo -e "${M} \"\t$(printf "\Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "${CPU}" "${A}" "${DTS}" "${IGPUS}" "${HBAS}" "${M_2_CACHE}" "${M_2_STORAGE}" "${USBS}" "${BETA}")\" ">>"${TMP_PATH}/menu"
+          [ ${COMPATIBLE} -eq 1 ] && echo -e "${M} \"\t$(printf "\Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "${A}" "${DTS}" "${IGPUS}" "${HBAS}" "${M_2_CACHE}" "${M_2_STORAGE}" "${USBS}" "${BETA}")\" ">>"${TMP_PATH}/menu"
         fi
       done < <(cat "${TMP_PATH}/modellist")
       if [ -n "${ARC_KEY}" ]; then
         dialog --backtitle "$(backtitle)" --title "Arc DSM Model" --colors \
           --cancel-label "Show all" --help-button --help-label "Exit" \
           --extra-button --extra-label "Info" \
-          --menu "Supported Models for your Hardware (x = supported / + = need Addons)\n$(printf "\Zb%-16s\Zn \Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "CPU" "Platform" "DT" "Arc" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 120 0 \
+          --menu "Supported Models for your Hardware (x = supported / + = need Addons)\n$(printf "\Zb%-16s\Zn \Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "CPU" "Platform" "DT" "Arc" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 110 0 \
           --file "${TMP_PATH}/menu" 2>"${TMP_PATH}/resp"
       else
         dialog --backtitle "$(backtitle)" --title "DSM Model" --colors \
           --cancel-label "Show all" --help-button --help-label "Exit" \
           --extra-button --extra-label "Info" \
-          --menu "Supported Models for your Hardware (x = supported / + = need Addons) | Syno Models can have faulty Values.\n$(printf "\Zb%-16s\Zn \Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "CPU" "Platform" "DT" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 120 0 \
+          --menu "Supported Models for your Hardware (x = supported / + = need Addons) | Syno Models can have faulty Values.\n$(printf "\Zb%-16s\Zn \Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "CPU" "Platform" "DT" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 110 0 \
           --file "${TMP_PATH}/menu" 2>"${TMP_PATH}/resp"
       fi
       RET=$?
@@ -380,8 +380,18 @@ function arcVersion() {
   writeConfigKey "modules" "{}" "${USER_CONFIG_FILE}"
   # Rewrite modules
   writeConfigKey "modules" "{}" "${USER_CONFIG_FILE}"
+  cp -f "${ARC_PATH}/include/modulelist" "${USER_UP_PATH}/modulelist"
+  echo -e "\n\n# Arc Modules" >>"${USER_UP_PATH}/modulelist"
+  KOLIST=""
+  for I in $(lsmod | awk -F' ' '{print $1}' | grep -v 'Module'); do
+    KOLIST+="$(getdepends "${PLATFORM}" "${KVERP}" "${I}") ${I} "
+  done
+  KOLIST=($(echo ${KOLIST} | tr ' ' '\n' | sort -u))
   while read -r ID DESC; do
     writeConfigKey "modules.\"${ID}\"" "" "${USER_CONFIG_FILE}"
+    for MOD in ${KOLIST[@]}; do
+      [ "${MOD}" == "${ID}" ] && echo "N ${ID}.ko" >>"${USER_UP_PATH}/modulelist"
+    done
   done < <(getAllModules "${PLATFORM}" "${KVERP}")
   # Check for Only Version
   if [ "${ONLYVERSION}" == "true" ]; then
@@ -1040,7 +1050,7 @@ else
     echo "9 \"Offline Mode: \Z4${OFFLINE}\Zn \" "                                             >>"${TMP_PATH}/menu"
     echo "y \"Choose a Keymap \" "                                                            >>"${TMP_PATH}/menu"
     if [ "${OFFLINE}" == "false" ]; then
-      echo "z \"Update\" "                                                                    >>"${TMP_PATH}/menu"
+      echo "z \"Update Loader\" "                                                             >>"${TMP_PATH}/menu"
     fi
     echo "I \"Restart/Shutdown \" "                                                           >>"${TMP_PATH}/menu"
     echo "V \"Credits \" "                                                                    >>"${TMP_PATH}/menu"
