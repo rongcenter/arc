@@ -11,39 +11,12 @@
 . ${ARC_PATH}/include/network.sh
 . ${ARC_PATH}/include/update.sh
 . ${ARC_PATH}/arc-functions.sh
+. ${ARC_PATH}/boot.sh
 
 [ -z "${LOADER_DISK}" ] && die "Loader Disk not found!"
 
-# Memory: Check Memory installed
-RAMTOTAL="$(awk '/MemTotal:/ {printf "%.0f", $2 / 1024 / 1024}' /proc/meminfo 2>/dev/null)"
-[ -z "${RAMTOTAL}" ] && RAMTOTAL="8"
-
-# Check for Hypervisor
-if grep -q "^flags.*hypervisor.*" /proc/cpuinfo; then
-  MACHINE="$(lscpu | grep Hypervisor | awk '{print $3}')" # KVM or VMware
-else
-  MACHINE="Native"
-fi
-# Check for AES and ACPI Support
-if ! grep -q "^flags.*aes.*" /proc/cpuinfo; then
-  AESSYS="false"
-else
-  AESSYS="true"
-fi
-if ! grep -q "^flags.*acpi.*" /proc/cpuinfo; then
-  ACPISYS="false"
-else
-  ACPISYS="true"
-fi
-CPUFREQUENCIES=$(ls -ltr /sys/devices/system/cpu/cpufreq/* 2>/dev/null | wc -l)
-if [ ${CPUFREQUENCIES} -gt 0 ]; then
-  CPUFREQ="true"
-else
-  CPUFREQ="false"
-fi
-
-# Get Loader Disk Bus
-BUS=$(getBus "${LOADER_DISK}")
+# Check for System
+systemCheck
 
 # Offline Mode check
 ARCNIC="$(readConfigKey "arc.nic" "${USER_CONFIG_FILE}")"
@@ -184,7 +157,7 @@ function arcModel() {
           fi
           [ -z "$(grep -w "${M}" "${S_FILE}")" ] && COMPATIBLE=0
         fi
-        [ -z "$(grep -w "${M}" "${S_FILE}")" ] && BETA="Syno" || BETA="Arc"
+        [ -n "$(grep -w "${M}" "${S_FILE}")" ] && BETA="Arc" || BETA="Syno"
         [ -z "$(grep -w "${A}" "${P_FILE}")" ] && COMPATIBLE=0
         if [ -n "${ARC_KEY}" ]; then
           [ ${COMPATIBLE} -eq 1 ] && echo -e "${M} \"\t$(printf "\Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "${A}" "${DTS}" "${ARC}" "${IGPUS}" "${HBAS}" "${M_2_CACHE}" "${M_2_STORAGE}" "${USBS}" "${BETA}")\" ">>"${TMP_PATH}/menu"
@@ -196,13 +169,13 @@ function arcModel() {
         dialog --backtitle "$(backtitle)" --title "Arc DSM Model" --colors \
           --cancel-label "Show all" --help-button --help-label "Exit" \
           --extra-button --extra-label "Info" \
-          --menu "Supported Models for your Hardware (x = supported / + = need Addons)\n$(printf "\Zb%-16s\Zn \Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "CPU" "Platform" "DT" "Arc" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 110 0 \
+          --menu "Supported Models for your Hardware (x = supported / + = need Addons)\n$(printf "\Zb%-16s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "Platform" "DT" "Arc" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 110 0 \
           --file "${TMP_PATH}/menu" 2>"${TMP_PATH}/resp"
       else
         dialog --backtitle "$(backtitle)" --title "DSM Model" --colors \
           --cancel-label "Show all" --help-button --help-label "Exit" \
           --extra-button --extra-label "Info" \
-          --menu "Supported Models for your Hardware (x = supported / + = need Addons) | Syno Models can have faulty Values.\n$(printf "\Zb%-16s\Zn \Zb%-8s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "CPU" "Platform" "DT" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 110 0 \
+          --menu "Supported Models for your Hardware (x = supported / + = need Addons) | Syno Models can have faulty Values.\n$(printf "\Zb%-16s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "Platform" "DT" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 110 0 \
           --file "${TMP_PATH}/menu" 2>"${TMP_PATH}/resp"
       fi
       RET=$?
@@ -524,7 +497,7 @@ function arcSettings() {
   if [ "${CUSTOM}" == "false" ]; then
     # Ask for Build
     dialog --clear --backtitle "$(backtitle)" --title "Config done" \
-      --menu "Build now?" 7 40 0 \
+      --no-cancel --menu "Build now?" 7 40 0 \
       1 "Yes - Build Arc Loader now" \
       2 "No - I want to make changes" \
     2>"${TMP_PATH}/resp"
@@ -829,7 +802,7 @@ function arcFinish() {
     [ -f "${PART3_PATH}/automated" ] && rm -f "${PART3_PATH}/automated" >/dev/null
     # Ask for Boot
     dialog --clear --backtitle "$(backtitle)" --title "Build done"\
-      --menu "Boot now?" 7 40 0 \
+      --no-cancel --menu "Boot now?" 7 40 0 \
       1 "Yes - Boot Arc Loader now" \
       2 "No - I want to make changes" \
     2>"${TMP_PATH}/resp"
@@ -852,11 +825,10 @@ function juniorboot() {
   if [ $? -eq 0 ]; then
     make
   fi
-  grub-editenv ${USER_GRUBENVFILE} set next_entry="junior"
   dialog --backtitle "$(backtitle)" --title "Arc Boot" \
     --infobox "Booting DSM Reinstall Mode...\nPlease stay patient!" 4 30
   sleep 2
-  exec reboot
+  rebootTo "junior"
 }
 
 ###############################################################################
@@ -871,7 +843,7 @@ function boot() {
   dialog --backtitle "$(backtitle)" --title "Arc Boot" \
     --infobox "Booting DSM...\nPlease stay patient!" 4 25
   sleep 2
-  exec reboot
+  bootDSM
 }
 
 ###############################################################################
@@ -889,12 +861,12 @@ else
   [ "${BUILDDONE}" == "true" ] && NEXT="3" || NEXT="1"
   while true; do
     echo "= \"\Z4========== Main ==========\Zn \" "                                            >"${TMP_PATH}/menu"
-    if [ -z "${ARC_KEY}" ]; then
-      echo "0 \"Decrypt Arc Patch \" "                                                        >>"${TMP_PATH}/menu"
-    fi
     if [ "${ARCPATCH}" == "true" ] && [ -z "ARC_KEY" ]; then
-      echo "# \"Please decrypt first \" "                                                     >>"${TMP_PATH}/menu"
+      echo "0 \"Decrypt Arc Patch \" "                                                        >>"${TMP_PATH}/menu"
     else
+      if [ -z "${ARC_KEY}" ]; then
+        echo "0 \"Decrypt Arc Patch \" "                                                      >>"${TMP_PATH}/menu"
+      fi
       echo "1 \"Choose Model \" "                                                             >>"${TMP_PATH}/menu"
       if [ "${CONFDONE}" == "true" ]; then
         echo "2 \"Build Loader \" "                                                           >>"${TMP_PATH}/menu"
@@ -1158,7 +1130,7 @@ else
       x) backupMenu; NEXT="x" ;;
       M) arcNIC; NEXT="M" ;;
       9) [ "${OFFLINE}" == "true" ] && OFFLINE='false' || OFFLINE='true'
-        writeConfigKey "arc.offline" "${OFFLINE}" "${USER_CONFIG_FILE}"
+        [ "${OFFLINE}" == "false" ] && offlineCheck
         writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
         BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         NEXT="9"
