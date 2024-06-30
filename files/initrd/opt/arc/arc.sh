@@ -290,7 +290,7 @@ function arcVersion() {
     fi
   done < <(readConfigMap "addons" "${USER_CONFIG_FILE}")
   # Reset Modules
-  KVER="$(readConfigKey "platforms.${PLATFORM}.productvers.[${PRODUCTVER}].kver" "${P_FILE}")"
+  KVER="$(readConfigKey "platforms.${PLATFORM}.productvers.\"${PRODUCTVER}\".kver" "${P_FILE}")"
   # Modify KVER for Epyc7002
   if [ "${PLATFORM}" == "epyc7002" ]; then
     KVERP="${PRODUCTVER}-${KVER}"
@@ -522,7 +522,7 @@ function arcSummary() {
   PRODUCTVER="$(readConfigKey "productver" "${USER_CONFIG_FILE}")"
   PLATFORM="$(readConfigKey "platform" "${USER_CONFIG_FILE}")"
   DT="$(readConfigKey "platforms.${PLATFORM}.dt" "${P_FILE}")"
-  KVER="$(readConfigKey "platforms.${PLATFORM}.productvers.[${PRODUCTVER}].kver" "${P_FILE}")"
+  KVER="$(readConfigKey "platforms.${PLATFORM}.productvers.\"${PRODUCTVER}\".kver" "${P_FILE}")"
   ARCPATCH="$(readConfigKey "arc.patch" "${USER_CONFIG_FILE}")"
   ADDONSINFO="$(readConfigEntriesArray "addons" "${USER_CONFIG_FILE}")"
   REMAP="$(readConfigKey "arc.remap" "${USER_CONFIG_FILE}")"
@@ -887,15 +887,17 @@ else
       fi
       if [ "${ARCOPTS}" == "true" ]; then
         echo "= \"\Z4======== Arc DSM ========\Zn \" "                                        >>"${TMP_PATH}/menu"
-        echo "e \"Version \" "                                                                >>"${TMP_PATH}/menu"
         echo "b \"Addons \" "                                                                 >>"${TMP_PATH}/menu"
         echo "d \"Modules \" "                                                                >>"${TMP_PATH}/menu"
-        echo "g \"Frequency Scaling \" "                                                      >>"${TMP_PATH}/menu"
+        echo "e \"Version \" "                                                                >>"${TMP_PATH}/menu"
+        if [ "${CPUFREQ}" == "true" ]; then
+          echo "g \"Frequency Scaling \" "                                                    >>"${TMP_PATH}/menu"
+        fi
         if [ "${DT}" == "false" ] && [ ${SATACONTROLLER} -gt 0 ]; then
           echo "S \"Sata PortMap \" "                                                         >>"${TMP_PATH}/menu"
         fi
         if [ "${DT}" == "true" ]; then
-          echo "o \"DTS Map \" "                                                              >>"${TMP_PATH}/menu"
+          echo "o \"DTS Map Options\" "                                                       >>"${TMP_PATH}/menu"
         fi
         echo "P \"StoragePanel Options\" "                                                    >>"${TMP_PATH}/menu"
         echo "Q \"SequentialIO Options\" "                                                    >>"${TMP_PATH}/menu"
@@ -1046,7 +1048,7 @@ else
         fi
         PLATFORM="$(readConfigKey "platform" "${USER_CONFIG_FILE}")"
         PRODUCTVER="$(readConfigKey "productver" "${USER_CONFIG_FILE}")"
-        KVER="$(readConfigKey "platforms.${PLATFORM}.productvers.[${PRODUCTVER}].kver" "${P_FILE}")"
+        KVER="$(readConfigKey "platforms.${PLATFORM}.productvers.\"${PRODUCTVER}\".kver" "${P_FILE}")"
         if [ -n "${PLATFORM}" ] && [ -n "${KVER}" ]; then
           if [ "${PLATFORM}" == "epyc7002" ]; then
             KVERP="${PRODUCTVER}-${KVER}"
