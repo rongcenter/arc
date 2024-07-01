@@ -6,6 +6,7 @@
 
 . ${ARC_PATH}/include/functions.sh
 . ${ARC_PATH}/include/addons.sh
+. ${ARC_PATH}/include/compat.sh
 . ${ARC_PATH}/include/modules.sh
 . ${ARC_PATH}/include/storage.sh
 . ${ARC_PATH}/include/network.sh
@@ -37,7 +38,6 @@ fi
 
 # Get Arc Data from Config
 ARC_KEY="$(readConfigKey "arc.key" "${USER_CONFIG_FILE}")"
-ARCIPV6="$(readConfigKey "arc.ipv6" "${USER_CONFIG_FILE}")"
 ARCPATCH="$(readConfigKey "arc.patch" "${USER_CONFIG_FILE}")"
 BOOTIPWAIT="$(readConfigKey "arc.bootipwait" "${USER_CONFIG_FILE}")"
 DIRECTBOOT="$(readConfigKey "arc.directboot" "${USER_CONFIG_FILE}")"
@@ -130,7 +130,9 @@ function arcModel() {
         BETA=""
         [ -n "${ARCCONF}" ] && ARC="x" || ARC=""
         [ "${DT}" == "true" ] && DTS="x" || DTS=""
-        [[ "${A}" == "apollolake" || "${A}" == "geminilake" || "${A}" == "epyc7002" ]] && IGPUS="x" || IGPUS=""
+        IGPUS=""
+        [[ "${A}" == "apollolake" || "${A}" == "geminilake" ]] && IGPUS="up to 10th"
+        [ "${A}" == "epyc7002" ] && IGPUS="up to 14th" 
         [ "${DT}" == "true" ] && HBAS="" || HBAS="x"
         [ "${M}" == "SA6400" ] && HBAS="x"
         [ "${DT}" == "false" ] && USBS="x" || USBS=""
@@ -160,22 +162,22 @@ function arcModel() {
         [ -n "$(grep -w "${M}" "${S_FILE}")" ] && BETA="Arc" || BETA="Syno"
         [ -z "$(grep -w "${A}" "${P_FILE}")" ] && COMPATIBLE=0
         if [ -n "${ARC_KEY}" ]; then
-          [ ${COMPATIBLE} -eq 1 ] && echo -e "${M} \"\t$(printf "\Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "${A}" "${DTS}" "${ARC}" "${IGPUS}" "${HBAS}" "${M_2_CACHE}" "${M_2_STORAGE}" "${USBS}" "${BETA}")\" ">>"${TMP_PATH}/menu"
+          [ ${COMPATIBLE} -eq 1 ] && echo -e "${M} \"\t$(printf "\Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-12s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "${A}" "${DTS}" "${ARC}" "${IGPUS}" "${HBAS}" "${M_2_CACHE}" "${M_2_STORAGE}" "${USBS}" "${BETA}")\" ">>"${TMP_PATH}/menu"
         else
-          [ ${COMPATIBLE} -eq 1 ] && echo -e "${M} \"\t$(printf "\Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "${A}" "${DTS}" "${IGPUS}" "${HBAS}" "${M_2_CACHE}" "${M_2_STORAGE}" "${USBS}" "${BETA}")\" ">>"${TMP_PATH}/menu"
+          [ ${COMPATIBLE} -eq 1 ] && echo -e "${M} \"\t$(printf "\Zb%-15s\Zn \Zb%-5s\Zn \Zb%-12s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "${A}" "${DTS}" "${IGPUS}" "${HBAS}" "${M_2_CACHE}" "${M_2_STORAGE}" "${USBS}" "${BETA}")\" ">>"${TMP_PATH}/menu"
         fi
       done < <(cat "${TMP_PATH}/modellist")
       if [ -n "${ARC_KEY}" ]; then
         dialog --backtitle "$(backtitle)" --title "Arc DSM Model" --colors \
           --cancel-label "Show all" --help-button --help-label "Exit" \
           --extra-button --extra-label "Info" \
-          --menu "Supported Models for your Hardware (x = supported / + = need Addons)\n$(printf "\Zb%-16s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "Platform" "DT" "Arc" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 110 0 \
+          --menu "Supported Models for your Hardware (x = supported / + = need Addons)\n$(printf "\Zb%-16s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-12s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "Platform" "DT" "Arc" "iGPU/i915" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 112 0 \
           --file "${TMP_PATH}/menu" 2>"${TMP_PATH}/resp"
       else
         dialog --backtitle "$(backtitle)" --title "DSM Model" --colors \
           --cancel-label "Show all" --help-button --help-label "Exit" \
           --extra-button --extra-label "Info" \
-          --menu "Supported Models for your Hardware (x = supported / + = need Addons) | Syno Models can have faulty Values.\n$(printf "\Zb%-16s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "Platform" "DT" "iGPU" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 110 0 \
+          --menu "Supported Models for your Hardware (x = supported / + = need Addons) | Syno Models can have faulty Values.\n$(printf "\Zb%-16s\Zn \Zb%-15s\Zn \Zb%-5s\Zn \Zb%-12s\Zn \Zb%-5s\Zn \Zb%-10s\Zn \Zb%-12s\Zn \Zb%-10s\Zn \Zb%-10s\Zn" "Model" "Platform" "DT" "iGPU/i915" "HBA" "M.2 Cache" "M.2 Volume" "USB Mount" "Source")" 0 112 0 \
           --file "${TMP_PATH}/menu" 2>"${TMP_PATH}/resp"
       fi
       RET=$?
@@ -189,7 +191,7 @@ function arcModel() {
           [ ${RESTRICT} -eq 1 ] && RESTRICT=0 || RESTRICT=1
           ;;
         2) # help-button -> Exit
-          return 0
+          return 1
           break
           ;;
         3) # extra-button -> Platform Info
@@ -206,18 +208,15 @@ function arcModel() {
     done
   fi
   # Reset Model Config if changed
-  if [ -z "${resp}" ] || [ "${MODEL}" != "${resp}" ]; then
-    if [ "${CUSTOM}" == "false" ]; then
-      PRODUCTVER=""
-      MODEL="${resp}"
-      writeConfigKey "model" "${MODEL}" "${USER_CONFIG_FILE}"
-      writeConfigKey "productver" "" "${USER_CONFIG_FILE}"
-    else
-      MODEL="$(readConfigKey "model" "${USER_CONFIG_FILE}")"
-    fi
+  if [ "${MODEL}" != "${resp}" ]; then
+    PRODUCTVER=""
+    MODEL="${resp}"
     PLATFORM="$(grep -w "${MODEL}" "${TMP_PATH}/modellist" | awk '{print $2}' | head -n 1)"
     MODELID=$(echo ${MODEL} | sed 's/d$/D/; s/rp$/RP/; s/rp+/RP+/')
+    writeConfigKey "model" "${MODEL}" "${USER_CONFIG_FILE}"
+    writeConfigKey "productver" "" "${USER_CONFIG_FILE}"
     writeConfigKey "addons" "{}" "${USER_CONFIG_FILE}"
+    writeConfigKey "cmdline" "{}" "${USER_CONFIG_FILE}"
     writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
     writeConfigKey "arc.confdone" "false" "${USER_CONFIG_FILE}"
     writeConfigKey "arc.emmcboot" "false" "${USER_CONFIG_FILE}"
@@ -229,23 +228,34 @@ function arcModel() {
     writeConfigKey "arc.pathash" "" "${USER_CONFIG_FILE}"
     writeConfigKey "arc.remap" "" "${USER_CONFIG_FILE}"
     writeConfigKey "arc.sn" "" "${USER_CONFIG_FILE}"
-    writeConfigKey "cmdline" "{}" "${USER_CONFIG_FILE}"
     writeConfigKey "modelid" "${MODELID}" "${USER_CONFIG_FILE}"
-    writeConfigKey "modules" "{}" "${USER_CONFIG_FILE}"
     writeConfigKey "platform" "${PLATFORM}" "${USER_CONFIG_FILE}"
     writeConfigKey "ramdisk-hash" "" "${USER_CONFIG_FILE}"
     writeConfigKey "synoinfo" "{}" "${USER_CONFIG_FILE}"
     writeConfigKey "zimage-hash" "" "${USER_CONFIG_FILE}"
-    ARCPATCH="$(readConfigKey "arc.patch" "${USER_CONFIG_FILE}")"
-    BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
-    CONFDONE="$(readConfigKey "arc.confdone" "${USER_CONFIG_FILE}")"
-    EMMCBOOT="$(readConfigKey "arc.emmcboot" "${USER_CONFIG_FILE}")"
-    HDDSORT="$(readConfigKey "arc.hddsort" "${USER_CONFIG_FILE}")"
-    KERNEL="$(readConfigKey "arc.kernel" "${USER_CONFIG_FILE}")"
-    ODP="$(readConfigKey "arc.odp" "${USER_CONFIG_FILE}")"
-    if [ -f "${ORI_ZIMAGE_FILE}" ] || [ -f "${ORI_RDGZ_FILE}" ] || [ -f "${MOD_ZIMAGE_FILE}" ] || [ -f "${MOD_RDGZ_FILE}" ]; then
-      rm -f "${ORI_ZIMAGE_FILE}" "${ORI_RDGZ_FILE}" "${MOD_ZIMAGE_FILE}" "${MOD_RDGZ_FILE}" 2>/dev/null || true
-    fi
+  elif [ -z "${resp}" ]; then
+    MODEL="$(readConfigKey "model" "${USER_CONFIG_FILE}")"
+    PLATFORM="$(grep -w "${MODEL}" "${TMP_PATH}/modellist" | awk '{print $2}' | head -n 1)"
+    MODELID=$(echo ${MODEL} | sed 's/d$/D/; s/rp$/RP/; s/rp+/RP+/')
+    writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
+    writeConfigKey "arc.confdone" "false" "${USER_CONFIG_FILE}"
+    writeConfigKey "arc.paturl" "" "${USER_CONFIG_FILE}"
+    writeConfigKey "arc.pathash" "" "${USER_CONFIG_FILE}"
+    writeConfigKey "arc.remap" "" "${USER_CONFIG_FILE}"
+    writeConfigKey "modelid" "${MODELID}" "${USER_CONFIG_FILE}"
+    writeConfigKey "platform" "${PLATFORM}" "${USER_CONFIG_FILE}"
+    writeConfigKey "ramdisk-hash" "" "${USER_CONFIG_FILE}"
+    writeConfigKey "zimage-hash" "" "${USER_CONFIG_FILE}"
+  fi
+  ARCPATCH="$(readConfigKey "arc.patch" "${USER_CONFIG_FILE}")"
+  BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
+  CONFDONE="$(readConfigKey "arc.confdone" "${USER_CONFIG_FILE}")"
+  EMMCBOOT="$(readConfigKey "arc.emmcboot" "${USER_CONFIG_FILE}")"
+  HDDSORT="$(readConfigKey "arc.hddsort" "${USER_CONFIG_FILE}")"
+  KERNEL="$(readConfigKey "arc.kernel" "${USER_CONFIG_FILE}")"
+  ODP="$(readConfigKey "arc.odp" "${USER_CONFIG_FILE}")"
+  if [ -f "${ORI_ZIMAGE_FILE}" ] || [ -f "${ORI_RDGZ_FILE}" ] || [ -f "${MOD_ZIMAGE_FILE}" ] || [ -f "${MOD_RDGZ_FILE}" ]; then
+    rm -f "${ORI_ZIMAGE_FILE}" "${ORI_RDGZ_FILE}" "${MOD_ZIMAGE_FILE}" "${MOD_RDGZ_FILE}" 2>/dev/null || true
   fi
   arcVersion
 }
@@ -297,7 +307,6 @@ function arcVersion() {
   else
     KVERP="${KVER}"
   fi
-  writeConfigKey "modules" "{}" "${USER_CONFIG_FILE}"
   # Rewrite modules
   writeConfigKey "modules" "{}" "${USER_CONFIG_FILE}"
   cp -f "${ARC_PATH}/include/modulelist" "${USER_UP_PATH}/modulelist"
@@ -334,10 +343,11 @@ function arcPatch() {
   CUSTOM="$(readConfigKey "arc.custom" "${USER_CONFIG_FILE}")"
   ARCCONF="$(readConfigKey "${MODEL}.serial" "${S_FILE}" 2>/dev/null)"
   # Check for Custom Build
-  if [ "${CUSTOM}" == "true" ]; then
+  SN="$(readConfigKey "arc.sn" "${USER_CONFIG_FILE}")"
+  if [ "${CUSTOM}" == "true" ] && [ -z "${SN}" ]; then
     SN=$(generateSerial "${MODEL}" false)
     writeConfigKey "arc.patch" "false" "${USER_CONFIG_FILE}"
-  else
+  elif [ "${CUSTOM}" == "false" ]; then
     if [ -n "${ARCCONF}" ]; then
       dialog --clear --backtitle "$(backtitle)" \
         --nocancel --title "Arc Patch"\
@@ -439,14 +449,15 @@ function arcSettings() {
     sleep 2
     getmapSelection
   fi
+  # Check for CPU Frequency Scaling
+  if [ "${CPUFREQ}" == "true" ]; then
+    # Select Governor for DSM
+    dialog --backtitle "$(backtitle)" --colors --title "CPU Frequency Scaling" \
+      --infobox "Generating Governor Table..." 3 40
+    governorSelection
+  fi
   # Check for Custom Build
   if [ "${CUSTOM}" == "false" ]; then
-    if [ "${CPUFREQ}" == "true" ]; then
-      # Select Governor for DSM
-      dialog --backtitle "$(backtitle)" --colors --title "DSM Frequency Scaling" \
-        --infobox "Generating Governor Table..." 3 40
-      governorSelection
-    fi
     # Select Addons
     dialog --backtitle "$(backtitle)" --colors --title "DSM Addons" \
       --infobox "Loading Addons Table..." 3 40
@@ -535,7 +546,6 @@ function arcSummary() {
   DIRECTBOOT="$(readConfigKey "arc.directboot" "${USER_CONFIG_FILE}")"
   KERNELLOAD="$(readConfigKey "arc.kernelload" "${USER_CONFIG_FILE}")"
   OFFLINE="$(readConfigKey "arc.offline" "${USER_CONFIG_FILE}")"
-  ARCIPV6="$(readConfigKey "arc.ipv6" "${USER_CONFIG_FILE}")"
   HDDSORT="$(readConfigKey "arc.hddsort" "${USER_CONFIG_FILE}")"
   NIC="$(readConfigKey "device.nic" "${USER_CONFIG_FILE}")"
   EXTERNALCONTROLLER="$(readConfigKey "device.externalcontroller" "${USER_CONFIG_FILE}")"
@@ -559,7 +569,6 @@ function arcSummary() {
   [ -n "${DISKMAP}" ] && SUMMARY+="\n>> DiskIdxMap: \Zb${DISKMAP}\Zn"
   [ -n "${PORTREMAP}" ] && SUMMARY+="\n>> SataRemap: \Zb${PORTREMAP}\Zn"
   [ "${DT}" == "true" ] && SUMMARY+="\n>> Sort Drives: \Zb${HDDSORT}\Zn"
-  SUMMARY+="\n>> IPv6: \Zb${ARCIPV6}\Zn"
   SUMMARY+="\n>> Offline Mode: \Zb${OFFLINE}\Zn"
   SUMMARY+="\n>> Directboot: \Zb${DIRECTBOOT}\Zn"
   SUMMARY+="\n>> eMMC Boot: \Zb${EMMCBOOT}\Zn"
@@ -567,6 +576,8 @@ function arcSummary() {
   SUMMARY+="\n>> Addons: \Zb${ADDONSINFO}\Zn"
   SUMMARY+="\n"
   SUMMARY+="\n\Z4> Device Information\Zn"
+  SUMMARY+="\n>> AES | ACPI: \Zb${AESSYS} | ${ACPISYS}\Zn"
+  SUMMARY+="\n>> CPU Scaling: \Zb${CPUFREQ}\Zn"
   SUMMARY+="\n>> NIC: \Zb${NIC}\Zn"
   SUMMARY+="\n>> Disks (incl. USB): \Zb${DRIVES}\Zn"
   SUMMARY+="\n>> Disks (internal): \Zb${HARDDRIVES}\Zn"
@@ -717,7 +728,7 @@ function make() {
         fi
       fi
     fi
-  elif [ "${OFFLINE}" == "true" ]; then
+  elif [ "${OFFLINE}" == "true" ] && [ "${CUSTOM}" ==  "false" ]; then
     if [ -f "${ORI_ZIMAGE_FILE}" ] && [ -f "${ORI_RDGZ_FILE}" ]; then
       rm -f "${MOD_ZIMAGE_FILE}" "${MOD_RDGZ_FILE}" 2>/dev/null || true
       VALID="true"
@@ -757,13 +768,20 @@ function make() {
         sleep 5
       fi
     fi
+  else
+    dialog --backtitle "$(backtitle)" --title "Arc Build" --aspect 18 \
+      --infobox "Can't build Custom Loader while Offline!\nExit." 4 40
+    VALID="false"
+    sleep 5
   fi
   # Copy DSM Files to Locations if DSM Files not found
-  if [ ! -f "${ORI_ZIMAGE_FILE}" ] || [ ! -f "${ORI_RDGZ_FILE}" ]; then
-    if copyDSMFiles "${UNTAR_PAT_PATH}" 2>/dev/null; then
-      VALID="true"
-    else
-      VALID="false"
+  if [ "${VALID}" == "true" ]; then
+    if [ ! -f "${ORI_ZIMAGE_FILE}" ] || [ ! -f "${ORI_RDGZ_FILE}" ]; then
+      if copyDSMFiles "${UNTAR_PAT_PATH}" 2>/dev/null; then
+        VALID="true"
+      else
+        VALID="false"
+      fi
     fi
   fi
   if [ -f "${ORI_ZIMAGE_FILE}" ] && [ -f "${ORI_RDGZ_FILE}" ] && [ "${VALID}" == "true" ]; then
@@ -774,6 +792,8 @@ function make() {
       --progressbox "Doing the Magic..." 20 70
   fi
   if [ -f "${ORI_ZIMAGE_FILE}" ] && [ -f "${ORI_RDGZ_FILE}" ] && [ -f "${MOD_ZIMAGE_FILE}" ] && [ -f "${MOD_RDGZ_FILE}" ]; then
+    writeConfigKey "arc.builddone" "true" "${USER_CONFIG_FILE}"
+    BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
     arcFinish
   else
     dialog --backtitle "$(backtitle)" --title "Build Loader" --aspect 18 \
@@ -791,13 +811,11 @@ function make() {
 function arcFinish() {
   # Verify Files exist
   CUSTOM="$(readConfigKey "arc.custom" "${USER_CONFIG_FILE}")"
-  # Build is done
   rm -f "${LOG_FILE}" >/dev/null
-  writeConfigKey "arc.builddone" "true" "${USER_CONFIG_FILE}"
-  BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
   # Check for Automated Mode
   if [ "${CUSTOM}" == "true" ]; then
-    boot && exit 0
+    [ ! -f "${PART3_PATH}/automated" ] && echo "${ARC_VERSION}-${MODEL}-${PRODUCTVER}-custom" >"${PART3_PATH}/automated"
+    boot
   elif [ "${CUSTOM}" == "false" ]; then
     [ -f "${PART3_PATH}/automated" ] && rm -f "${PART3_PATH}/automated" >/dev/null
     # Ask for Boot
@@ -809,7 +827,7 @@ function arcFinish() {
     resp=$(cat ${TMP_PATH}/resp)
     [ -z "${resp}" ] && return 1
     if [ ${resp} -eq 1 ]; then
-      boot && exit 0
+      boot
     elif [ ${resp} -eq 2 ]; then
       return 0
     fi
@@ -897,11 +915,11 @@ else
           echo "S \"Sata PortMap \" "                                                         >>"${TMP_PATH}/menu"
         fi
         if [ "${DT}" == "true" ]; then
-          echo "o \"DTS Map Options\" "                                                       >>"${TMP_PATH}/menu"
+          echo "o \"DTS Map Options \" "                                                      >>"${TMP_PATH}/menu"
         fi
-        echo "P \"StoragePanel Options\" "                                                    >>"${TMP_PATH}/menu"
-        echo "Q \"SequentialIO Options\" "                                                    >>"${TMP_PATH}/menu"
-        echo "p \"Patch Options (SN/Mac)\" "                                                  >>"${TMP_PATH}/menu"
+        echo "P \"StoragePanel Options \" "                                                   >>"${TMP_PATH}/menu"
+        echo "Q \"SequentialIO Options \" "                                                   >>"${TMP_PATH}/menu"
+        echo "p \"Patch Options (SN/Mac) \" "                                                 >>"${TMP_PATH}/menu"
       fi
       if [ "${BOOTOPTS}" == "true" ]; then
         echo "6 \"\Z1Hide Boot Options\Zn \" "                                                >>"${TMP_PATH}/menu"
@@ -956,9 +974,9 @@ else
       echo "u \"Switch LKM version: \Z4${LKM}\Zn \" "                                         >>"${TMP_PATH}/menu"
       echo "B \"Grep DSM Config from Backup \" "                                              >>"${TMP_PATH}/menu"
       echo "L \"Grep Logs from dbgutils \" "                                                  >>"${TMP_PATH}/menu"
-      echo "w \"Reset Loader to Defaults\" "                                                  >>"${TMP_PATH}/menu"
-      echo "C \"Clone Loader to Disk\" "                                                      >>"${TMP_PATH}/menu"
-      echo "F \"\Z1Formate Disks\Zn \" "                                                      >>"${TMP_PATH}/menu"
+      echo "w \"Reset Loader to Defaults \" "                                                 >>"${TMP_PATH}/menu"
+      echo "C \"Clone Loader to Disk \" "                                                     >>"${TMP_PATH}/menu"
+      echo "F \"\Z1Formate Disks \Zn \" "                                                     >>"${TMP_PATH}/menu"
       echo "n \"Grub Bootloader Config \" "                                                   >>"${TMP_PATH}/menu"
       echo "v \"Write Loader Modifications to Disk \" "                                       >>"${TMP_PATH}/menu"
       if [ "${OFFLINE}" == "false" ]; then
@@ -971,7 +989,7 @@ else
     echo "9 \"Offline Mode: \Z4${OFFLINE}\Zn \" "                                             >>"${TMP_PATH}/menu"
     echo "y \"Choose a Keymap \" "                                                            >>"${TMP_PATH}/menu"
     if [ "${OFFLINE}" == "false" ]; then
-      echo "z \"Update Loader\" "                                                             >>"${TMP_PATH}/menu"
+      echo "z \"Update Loader \" "                                                            >>"${TMP_PATH}/menu"
     fi
     echo "I \"Restart/Shutdown \" "                                                           >>"${TMP_PATH}/menu"
     echo "V \"Credits \" "                                                                    >>"${TMP_PATH}/menu"
@@ -985,7 +1003,7 @@ else
       0) decryptMenu; NEXT="0" ;;
       1) arcModel; NEXT="2" ;;
       2) make; NEXT="3" ;;
-      3) boot && exit 0 ;;
+      3) boot; NEXT="3" ;;
       # Info Section
       a) sysinfo; NEXT="a" ;;
       A) networkdiag; NEXT="A" ;;
@@ -1069,12 +1087,6 @@ else
         writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
         BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         NEXT="H"
-        ;;
-      c) [ "${ARCIPV6}" == "true" ] && ARCIPV6='false' || ARCIPV6='true'
-        writeConfigKey "arc.ipv6" "${ARCIPV6}" "${USER_CONFIG_FILE}"
-        writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
-        BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
-        NEXT="c"
         ;;
       O) [ "${ODP}" == "false" ] && ODP='true' || ODP='false'
         writeConfigKey "arc.odp" "${ODP}" "${USER_CONFIG_FILE}"
