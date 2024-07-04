@@ -2,6 +2,7 @@
 # Boot
 function bootDSM () {
   # Get Loader Disk Bus
+  [ -z "${LOADER_DISK}" ] && die "Loader Disk not found!"
   BUS=$(getBus "${LOADER_DISK}")
   # Check if machine has EFI
   [ -d /sys/firmware/efi ] && EFI=1 || EFI=0
@@ -152,17 +153,17 @@ function bootDSM () {
     eval $(grep -o "ARC_CMDLINE=.*$" "${USER_GRUB_CONFIG}")
     if echo "apollolake geminilake purley" | grep -wq "${PLATFORM}"; then
       if ! echo "${ARC_CMDLINE}" | grep -q 'nox2apic'; then
-        sed -i "s/${ARC_CMDLINE}/${ARC_CMDLINE} nox2apic/g" "${USER_GRUB_CONFIG}"
+        sed -i 's/${ARC_CMDLINE}/${ARC_CMDLINE} nox2apic/g' "${USER_GRUB_CONFIG}"
         echo -e "\033[1;33mWarning: x2apic detected but not supported by ${PLATFORM} -> rebooting to disabling x2apic.\033[0m"
-        exec reboot
         sleep 3
+        exec reboot
       fi
     else
       if echo "${ARC_CMDLINE}" | grep -q 'nox2apic'; then
-        sed -i "s/ nox2apic//g" "${USER_GRUB_CONFIG}"
+        sed -i 's/ nox2apic//g' "${USER_GRUB_CONFIG}"
         echo -e "\033[1;33mWarning: x2apic detected and supported by ${PLATFORM} -> rebooting to enable x2apic.\033[0m"
-        exec reboot
         sleep 3
+        exec reboot
       fi
     fi
   fi
@@ -217,7 +218,7 @@ function bootDSM () {
   elif [ "${DIRECTBOOT}" == "false" ]; then
     BOOTIPWAIT="$(readConfigKey "arc.bootipwait" "${USER_CONFIG_FILE}")"
     ETHN="$(echo ${ETHX} | wc -w)"
-    [ -z "${BOOTIPWAIT}" ] && BOOTIPWAIT=20
+    [ -z "${BOOTIPWAIT}" ] && BOOTIPWAIT=30
     IPCON=""
     echo -e "\033[1;34mDetected ${NIC} NIC.\033[0m \033[1;37mWaiting for Connection:\033[0m"
     sleep 3
@@ -225,8 +226,8 @@ function bootDSM () {
       COUNT=0
       DRIVER=$(ls -ld /sys/class/net/${ETH}/device/driver 2>/dev/null | awk -F '/' '{print $NF}')
       while true; do
-        if ! ip link show ${ETH} 2>/dev/null | grep -q 'UP'; then
-          echo -e "\r\033[1;37m${DRIVER}:\033[0m DOWN"
+        if ethtool ${ETH} 2>/dev/null | grep 'Link detected' | grep -q 'no'; then
+          echo -e "\r\033[1;37m${DRIVER}:\033[0m NOT CONNECTED"
           break
         fi
         COUNT=$((${COUNT} + 1))
@@ -241,8 +242,8 @@ function bootDSM () {
           fi
           break
         fi
-        if ethtool ${ETH} 2>/dev/null | grep 'Link detected' | grep -q 'no'; then
-          echo -e "\r\033[1;37m${DRIVER}:\033[0m NOT CONNECTED"
+        if ! ip link show ${ETH} 2>/dev/null | grep -q 'UP'; then
+          echo -e "\r\033[1;37m${DRIVER}:\033[0m DOWN"
           break
         fi
         if [ ${COUNT} -ge ${BOOTIPWAIT} ]; then

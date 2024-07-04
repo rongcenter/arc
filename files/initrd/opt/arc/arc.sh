@@ -14,16 +14,14 @@
 . ${ARC_PATH}/arc-functions.sh
 . ${ARC_PATH}/boot.sh
 
-[ -z "${LOADER_DISK}" ] && die "Loader Disk not found!"
-
 # Check for System
 systemCheck
 
 # Offline Mode check
+offlineCheck
 ARCNIC="$(readConfigKey "arc.nic" "${USER_CONFIG_FILE}")"
 OFFLINE="$(readConfigKey "arc.offline" "${USER_CONFIG_FILE}")"
 AUTOMATED="$(readConfigKey "arc.automated" "${USER_CONFIG_FILE}")"
-offlineCheck
 
 # Get DSM Data from Config
 MODEL="$(readConfigKey "model" "${USER_CONFIG_FILE}")"
@@ -68,7 +66,7 @@ ntpCheck
 ###############################################################################
 # Mounts backtitle dynamically
 function backtitle() {
-  if [ -n "${NEWTAG}" ] && [ "${NEWTAG}" != "${ARC_VERSION}" ] && [ "${OFFLINE}" == "false" ]; then
+  if [ -n "${NEWTAG}" ] && [ "${NEWTAG}" != "${ARC_VERSION}" ]; then
     ARC_TITLE="${ARC_TITLE} > ${NEWTAG}"
   fi
   if [ -z "${MODEL}" ]; then
@@ -854,7 +852,7 @@ function juniorboot() {
   dialog --backtitle "$(backtitle)" --title "Arc Boot" \
     --infobox "Booting DSM Reinstall Mode...\nPlease stay patient!" 4 30
   sleep 2
-  rebootTo "junior"
+  rebootTo junior
 }
 
 ###############################################################################
@@ -976,7 +974,9 @@ else
     if [ "${LOADEROPTS}" == "true" ]; then
       echo "= \"\Z4========= Loader =========\Zn \" "                                         >>"${TMP_PATH}/menu"
       echo "= \"\Z4=== Edit with caution! ===\Zn \" "                                         >>"${TMP_PATH}/menu"
-      echo "R \"Automated Mode: \Z4${AUTOMATED}\Zn \" "                                       >>"${TMP_PATH}/menu"
+      if [ "${OFFLINE}" == "false" ]; then
+        echo "R \"Automated Mode: \Z4${AUTOMATED}\Zn \" "                                     >>"${TMP_PATH}/menu"
+      fi
       echo "W \"RD Compression: \Z4${RD_COMPRESSED}\Zn \" "                                   >>"${TMP_PATH}/menu"
       echo "X \"Sata DOM: \Z4${SATADOM}\Zn \" "                                               >>"${TMP_PATH}/menu"
       echo "u \"Switch LKM Version: \Z4${LKM}\Zn \" "                                         >>"${TMP_PATH}/menu"
@@ -1033,7 +1033,7 @@ else
       p) ONLYPATCH="true" && arcPatch; NEXT="p" ;;
       D) staticIPMenu; NEXT="D" ;;
       R) [ "${AUTOMATED}" == "false" ] && AUTOMATED='true' || AUTOMATED='false'
-        writeConfigKey "arc.custom" "${AUTOMATED}" "${USER_CONFIG_FILE}"
+        writeConfigKey "arc.automated" "${AUTOMATED}" "${USER_CONFIG_FILE}"
         if [ "${AUTOMATED}" == "true" ]; then
           [ ! -f "${PART3_PATH}/automated" ] && echo "${ARC_VERSION}-${MODEL}-${PRODUCTVER}-custom" >"${PART3_PATH}/automated"
         elif [ "${AUTOMATED}" == "false" ]; then
@@ -1140,19 +1140,25 @@ else
         NEXT="8"
         ;;
       c) [ "${IPV6}" == "true" ] && IPV6='false' || IPV6='true'
-        if "${IPV6}" == "true"; then
-          writeConfigKey "arc.ipv6" "${IPV6}" "${USER_CONFIG_FILE}"
-          sed -i 's/ipv6.disable=1/ipv6.disable=0/g' "${GRUB_CONFIG_FILE}"
-          dialog --backtitle "$(backtitle)" --title "Arc Boot" \
-            --infobox "Rebooting with IPv6 Support!" 4 30
-        elif "${IPV6}" == "false"; then
-          writeConfigKey "arc.ipv6" "${IPV6}" "${USER_CONFIG_FILE}"
-          sed -i 's/ipv6.disable=0/ipv6.disable=1/g' "${GRUB_CONFIG_FILE}"
-          dialog --backtitle "$(backtitle)" --title "Arc Boot" \
-            --infobox "Rebooting without IPv6 Support!" 4 30
+        if [ "${IPV6}" == "true" ]; then
+          writeConfigKey "arc.ipv6" "true" "${USER_CONFIG_FILE}"
+          if cat "${USER_GRUB_CONFIG}" | grep -q 'ipv6.disable=1'; then
+            sed -i 's/ipv6.disable=1/ipv6.disable=0/g' "${USER_GRUB_CONFIG}"
+            dialog --backtitle "$(backtitle)" --title "Arc Boot" \
+              --infobox "Rebooting with IPv6 Support!" 4 30
+            sleep 3
+            rebootTo config
+          fi
+        elif [ "${IPV6}" == "false" ]; then
+          writeConfigKey "arc.ipv6" "false" "${USER_CONFIG_FILE}"
+          if cat "${USER_GRUB_CONFIG}" | grep -q 'ipv6.disable=0'; then
+            sed -i 's/ipv6.disable=0/ipv6.disable=1/g' "${GRUB_CONFIG_FILE}"
+            dialog --backtitle "$(backtitle)" --title "Arc Boot" \
+              --infobox "Rebooting without IPv6 Support!" 4 30
+            sleep 3
+            rebootTo config
+          fi
         fi
-        sleep 3
-        rebootTo "config"
         NEXT="c"
         ;;
       l) editUserConfig; NEXT="l" ;;

@@ -8,9 +8,8 @@ set -e
 . ${ARC_PATH}/include/compat.sh
 . ${ARC_PATH}/boot.sh
 
-[ -z "${LOADER_DISK}" ] && die "Loader Disk not found!"
-
 # Get Loader Disk Bus
+[ -z "${LOADER_DISK}" ] && die "Loader Disk not found!"
 BUS=$(getBus "${LOADER_DISK}")
 
 # Check if machine has EFI
@@ -121,21 +120,21 @@ echo
 VID="0x46f4"
 PID="0x0001"
 
+# Inform user and check bus
+echo -e "Loader Disk: \033[1;34m${LOADER_DISK}\033[0m"
+echo -e "Loader Disk Type: \033[1;34m${BUS}\033[0m"
+
 BUSLIST="usb sata scsi nvme mmc xen"
 if [ "${BUS}" == "usb" ]; then
   VID="0x$(udevadm info --query property --name "${LOADER_DISK}" | grep ID_VENDOR_ID | cut -d= -f2)"
   PID="0x$(udevadm info --query property --name "${LOADER_DISK}" | grep ID_MODEL_ID | cut -d= -f2)"
 elif ! echo "${BUSLIST}" | grep -wq "${BUS}"; then
-  die "Loader disk is not USB or SATA/SCSI/NVME/eMMC/XEN"
+  die "Loader Disk ${BUS} is not USB or SATA/SCSI/NVME/eMMC"
 fi
 
 # Save variables to user config file
 writeConfigKey "vid" ${VID} "${USER_CONFIG_FILE}"
 writeConfigKey "pid" ${PID} "${USER_CONFIG_FILE}"
-
-# Inform user
-echo -e "Loader Disk: \033[1;34m${LOADER_DISK}\033[0m"
-echo -e "Loader Disk Type: \033[1;34m${BUS}\033[0m"
 
 # Load keymap name
 LAYOUT="$(readConfigKey "layout" "${USER_CONFIG_FILE}")"
@@ -167,15 +166,15 @@ fi
 echo
 
 BOOTIPWAIT="$(readConfigKey "arc.bootipwait" "${USER_CONFIG_FILE}")"
-[ -z "${BOOTIPWAIT}" ] && BOOTIPWAIT=20
+[ -z "${BOOTIPWAIT}" ] && BOOTIPWAIT=30
 echo -e "\033[1;34mDetected ${ETHN} NIC.\033[0m \033[1;37mWaiting for Connection:\033[0m"
 sleep 3
 for ETH in ${ETHX}; do
   COUNT=0
   DRIVER=$(ls -ld /sys/class/net/${ETH}/device/driver 2>/dev/null | awk -F '/' '{print $NF}')
   while true; do
-    if ! ip link show ${ETH} 2>/dev/null | grep -q 'UP'; then
-      echo -e "\r\033[1;37m${DRIVER}:\033[0m DOWN"
+    if ethtool ${ETH} 2>/dev/null | grep 'Link detected' | grep -q 'no'; then
+      echo -e "\r\033[1;37m${DRIVER}:\033[0m NOT CONNECTED"
       break
     fi
     COUNT=$((${COUNT} + 1))
@@ -189,8 +188,8 @@ for ETH in ${ETHX}; do
       fi
       break
     fi
-    if ethtool ${ETH} 2>/dev/null | grep 'Link detected' | grep -q 'no'; then
-      echo -e "\r\033[1;37m${DRIVER}:\033[0m NOT CONNECTED"
+    if ! ip link show ${ETH} 2>/dev/null | grep -q 'UP'; then
+      echo -e "\r\033[1;37m${DRIVER}:\033[0m DOWN"
       break
     fi
     if [ ${COUNT} -ge ${BOOTIPWAIT} ]; then
