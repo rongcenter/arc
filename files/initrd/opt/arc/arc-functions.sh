@@ -1080,7 +1080,7 @@ function sysinfo() {
   TIMEOUT=5
   TEXT=""
   # Print System Informations
-  TEXT+="\n\Z4> System: ${MACHINE} | ${BOOTSYS}\Zn"
+  TEXT+="\n\Z4> System: ${MACHINE} | ${BOOTSYS} | ${BUS}\Zn"
   TEXT+="\n  Vendor: \Zb${VENDOR}\Zn"
   TEXT+="\n  CPU: \Zb${CPU}\Zn"
   if [ $(lspci -d ::300 | wc -l) -gt 0 ]; then
@@ -1098,6 +1098,7 @@ function sysinfo() {
   TEXT+="\n  AES | ACPI: \Zb${AESSYS} | ${ACPISYS}\Zn"
   TEXT+="\n  CPU Scaling: \Zb${CPUFREQ}\Zn"
   TEXT+="\n  Secure Boot: \Zb${SECURE}\Zn"
+  TEXT+="\n  Bootdisk: \Zb${LOADER_DISK}\Zn"
   TEXT+="\n  Date/Time: \Zb$(date)\Zn"
   TEXT+="\n"
   TEXT+="\n\Z4> Network: ${ETHN} NIC\Zn\n"
@@ -1980,15 +1981,15 @@ function rebootMenu() {
   echo -e "shell \"Exit to Shell Cmdline\"" >>"${TMP_PATH}/opts"
   echo -e "init \"Restart Loader Init\"" >>"${TMP_PATH}/opts"
   echo -e "network \"Restart Network Service\"" >>"${TMP_PATH}/opts"
-  dialog --backtitle "$(backtitle)" --title "Reboot" \
+  dialog --backtitle "$(backtitle)" --title "Power Menu" \
     --menu  "Choose a Destination" 0 0 0 --file "${TMP_PATH}/opts" \
     2>${TMP_PATH}/resp
   [ $? -ne 0 ] && return
   resp=$(cat ${TMP_PATH}/resp)
   [ -z "${resp}" ] && return
   REDEST=${resp}
-  dialog --backtitle "$(backtitle)" --title "Reboot" \
-    --infobox "Reboot to ${REDEST}!" 0 0
+  dialog --backtitle "$(backtitle)" --title "Power Menu" \
+    --infobox "${REDEST} selected ...!" 0 0
   if [ "${REDEST}" == "bios" ]; then
     efibootmgr -n 0000 >/dev/null 2>&1
     reboot
