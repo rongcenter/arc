@@ -278,6 +278,8 @@ function cmdlineMenu() {
   while IFS=': ' read -r KEY VALUE; do
     [ -n "${KEY}" ] && CMDLINE["${KEY}"]="${VALUE}"
   done < <(readConfigMap "cmdline" "${USER_CONFIG_FILE}")
+  # Loop menu
+  while true; do
   echo "1 \"Add a Cmdline item\""                                >"${TMP_PATH}/menu"
   echo "2 \"Delete Cmdline item(s)\""                           >>"${TMP_PATH}/menu"
   echo "3 \"CPU Fix\""                                          >>"${TMP_PATH}/menu"
@@ -285,9 +287,7 @@ function cmdlineMenu() {
   echo "5 \"PCI/IRQ Fix\""                                      >>"${TMP_PATH}/menu"
   echo "6 \"C-State Fix\""                                      >>"${TMP_PATH}/menu"
   echo "7 \"Show user Cmdline\""                                >>"${TMP_PATH}/menu"
-  echo "9 \"Kernelpanic Behavior\""                             >>"${TMP_PATH}/menu"
-  # Loop menu
-  while true; do
+  echo "8 \"Kernelpanic Behavior\""                             >>"${TMP_PATH}/menu"
     dialog --backtitle "$(backtitle)" --cancel-label "Exit" --menu "Choose an Option" 0 0 0 \
       --file "${TMP_PATH}/menu" 2>"${TMP_PATH}/resp"
     [ $? -ne 0 ] && break
@@ -342,108 +342,118 @@ function cmdlineMenu() {
         BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         ;;
       2)
-        if [ ${#CMDLINE[@]} -eq 0 ]; then
-          dialog --backtitle "$(backtitle)" --msgbox "No user cmdline to remove" 0 0
-          continue
-        fi
-        ITEMS=""
-        for I in "${!CMDLINE[@]}"; do
-          [ -z "${CMDLINE[${I}]}" ] && ITEMS+="${I} \"\" off " || ITEMS+="${I} ${CMDLINE[${I}]} off "
+        while true; do
+          if [ ${#CMDLINE[@]} -eq 0 ]; then
+            dialog --backtitle "$(backtitle)" --msgbox "No user cmdline to remove" 0 0
+            continue
+          fi
+          ITEMS=""
+          for I in "${!CMDLINE[@]}"; do
+            [ -z "${CMDLINE[${I}]}" ] && ITEMS+="${I} \"\" off " || ITEMS+="${I} ${CMDLINE[${I}]} off "
+          done
+          dialog --backtitle "$(backtitle)" \
+            --checklist "Select cmdline to remove" 0 0 0 ${ITEMS} \
+            2>"${TMP_PATH}/resp"
+          [ $? -ne 0 ] && break
+          resp=$(cat ${TMP_PATH}/resp)
+          [ -z "${resp}" ] && break
+          for I in ${resp}; do
+            unset 'CMDLINE[${I}]'
+            deleteConfigKey "cmdline.\"${I}\"" "${USER_CONFIG_FILE}"
+          done
+          writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
+          BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         done
-        dialog --backtitle "$(backtitle)" \
-          --checklist "Select cmdline to remove" 0 0 0 ${ITEMS} \
-          2>"${TMP_PATH}/resp"
-        [ $? -ne 0 ] && return 1
-        resp=$(cat ${TMP_PATH}/resp)
-        [ -z "${resp}" ] && return 1
-        for I in ${resp}; do
-          unset 'CMDLINE[${I}]'
-          deleteConfigKey "cmdline.\"${I}\"" "${USER_CONFIG_FILE}"
-        done
-        writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
-        BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         ;;
       3)
-        dialog --clear --backtitle "$(backtitle)" \
-          --title "CPU Fix" --menu "Fix?" 0 0 0 \
-          1 "Install" \
-          2 "Uninstall" \
-        2>"${TMP_PATH}/resp"
-        resp=$(cat ${TMP_PATH}/resp)
-        [ -z "${resp}" ] && return 1
-        if [ ${resp} -eq 1 ]; then
-          writeConfigKey "cmdline.nmi_watchdog" "0" "${USER_CONFIG_FILE}"
-          writeConfigKey "cmdline.tsc" "reliable" "${USER_CONFIG_FILE}"
-          dialog --backtitle "$(backtitle)" --title "CPU Fix" \
-            --aspect 18 --msgbox "Fix added to Cmdline" 0 0
-        elif [ ${resp} -eq 2 ]; then
-          deleteConfigKey "cmdline.nmi_watchdog" "${USER_CONFIG_FILE}"
-          deleteConfigKey "cmdline.tsc" "${USER_CONFIG_FILE}"
-          dialog --backtitle "$(backtitle)" --title "CPU Fix" \
-            --aspect 18 --msgbox "Fix uninstalled from Cmdline" 0 0
-        fi
+        while true; do
+          dialog --clear --backtitle "$(backtitle)" \
+            --title "CPU Fix" --menu "Fix?" 0 0 0 \
+            1 "Install" \
+            2 "Uninstall" \
+          2>"${TMP_PATH}/resp"
+          resp=$(cat ${TMP_PATH}/resp)
+          [ -z "${resp}" ] && break
+          if [ ${resp} -eq 1 ]; then
+            writeConfigKey "cmdline.nmi_watchdog" "0" "${USER_CONFIG_FILE}"
+            writeConfigKey "cmdline.tsc" "reliable" "${USER_CONFIG_FILE}"
+            dialog --backtitle "$(backtitle)" --title "CPU Fix" \
+              --aspect 18 --msgbox "Fix added to Cmdline" 0 0
+          elif [ ${resp} -eq 2 ]; then
+            deleteConfigKey "cmdline.nmi_watchdog" "${USER_CONFIG_FILE}"
+            deleteConfigKey "cmdline.tsc" "${USER_CONFIG_FILE}"
+            dialog --backtitle "$(backtitle)" --title "CPU Fix" \
+              --aspect 18 --msgbox "Fix uninstalled from Cmdline" 0 0
+          fi
+        done
         writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
         BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         ;;
       4)
-        dialog --clear --backtitle "$(backtitle)" \
-          --title "RAM Fix" --menu "Fix?" 0 0 0 \
-          1 "Install" \
-          2 "Uninstall" \
-        2>"${TMP_PATH}/resp"
-        resp=$(cat ${TMP_PATH}/resp)
-        [ -z "${resp}" ] && return 1
-        if [ ${resp} -eq 1 ]; then
-          writeConfigKey "cmdline.disable_mtrr_trim" "0" "${USER_CONFIG_FILE}"
-          writeConfigKey "cmdline.crashkernel" "auto" "${USER_CONFIG_FILE}"
-          dialog --backtitle "$(backtitle)" --title "RAM Fix" \
-            --aspect 18 --msgbox "Fix added to Cmdline" 0 0
-        elif [ ${resp} -eq 2 ]; then
-          deleteConfigKey "cmdline.disable_mtrr_trim" "${USER_CONFIG_FILE}"
-          deleteConfigKey "cmdline.crashkernel" "${USER_CONFIG_FILE}"
-          dialog --backtitle "$(backtitle)" --title "RAM Fix" \
-            --aspect 18 --msgbox "Fix removed from Cmdline" 0 0
-        fi
+        while true; do
+          dialog --clear --backtitle "$(backtitle)" \
+            --title "RAM Fix" --menu "Fix?" 0 0 0 \
+            1 "Install" \
+            2 "Uninstall" \
+          2>"${TMP_PATH}/resp"
+          resp=$(cat ${TMP_PATH}/resp)
+          [ -z "${resp}" ] && break
+          if [ ${resp} -eq 1 ]; then
+            writeConfigKey "cmdline.disable_mtrr_trim" "0" "${USER_CONFIG_FILE}"
+            writeConfigKey "cmdline.crashkernel" "auto" "${USER_CONFIG_FILE}"
+            dialog --backtitle "$(backtitle)" --title "RAM Fix" \
+              --aspect 18 --msgbox "Fix added to Cmdline" 0 0
+          elif [ ${resp} -eq 2 ]; then
+            deleteConfigKey "cmdline.disable_mtrr_trim" "${USER_CONFIG_FILE}"
+            deleteConfigKey "cmdline.crashkernel" "${USER_CONFIG_FILE}"
+            dialog --backtitle "$(backtitle)" --title "RAM Fix" \
+              --aspect 18 --msgbox "Fix removed from Cmdline" 0 0
+          fi
+        done
         writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
         BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         ;;
       5)
-        dialog --clear --backtitle "$(backtitle)" \
-          --title "PCI/IRQ Fix" --menu "Fix?" 0 0 0 \
-          1 "Install" \
-          2 "Uninstall" \
-        2>"${TMP_PATH}/resp"
-        resp=$(cat ${TMP_PATH}/resp)
-        [ -z "${resp}" ] && return 1
-        if [ ${resp} -eq 1 ]; then
-          writeConfigKey "cmdline.pci" "routeirq" "${USER_CONFIG_FILE}"
-          dialog --backtitle "$(backtitle)" --title "PCI/IRQ Fix" \
-            --aspect 18 --msgbox "Fix added to Cmdline" 0 0
-        elif [ ${resp} -eq 2 ]; then
-          deleteConfigKey "cmdline.pci" "${USER_CONFIG_FILE}"
-          dialog --backtitle "$(backtitle)" --title "PCI/IRQ Fix" \
-            --aspect 18 --msgbox "Fix uninstalled from Cmdline" 0 0
-        fi
+        while true; do
+          dialog --clear --backtitle "$(backtitle)" \
+            --title "PCI/IRQ Fix" --menu "Fix?" 0 0 0 \
+            1 "Install" \
+            2 "Uninstall" \
+          2>"${TMP_PATH}/resp"
+          resp=$(cat ${TMP_PATH}/resp)
+          [ -z "${resp}" ] && break
+          if [ ${resp} -eq 1 ]; then
+            writeConfigKey "cmdline.pci" "routeirq" "${USER_CONFIG_FILE}"
+            dialog --backtitle "$(backtitle)" --title "PCI/IRQ Fix" \
+              --aspect 18 --msgbox "Fix added to Cmdline" 0 0
+          elif [ ${resp} -eq 2 ]; then
+            deleteConfigKey "cmdline.pci" "${USER_CONFIG_FILE}"
+            dialog --backtitle "$(backtitle)" --title "PCI/IRQ Fix" \
+              --aspect 18 --msgbox "Fix uninstalled from Cmdline" 0 0
+          fi
+        done
         writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
         BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         ;;
       6)
-        dialog --clear --backtitle "$(backtitle)" \
-          --title "C-State Fix" --menu "Fix?" 0 0 0 \
-          1 "Install" \
-          2 "Uninstall" \
-        2>"${TMP_PATH}/resp"
-        resp=$(cat ${TMP_PATH}/resp)
-        [ -z "${resp}" ] && return 1
-        if [ ${resp} -eq 1 ]; then
-          writeConfigKey "cmdline.intel_idle.max_cstate" "1" "${USER_CONFIG_FILE}"
-          dialog --backtitle "$(backtitle)" --title "C-State Fix" \
-            --aspect 18 --msgbox "Fix added to Cmdline" 0 0
-        elif [ ${resp} -eq 2 ]; then
-          deleteConfigKey "cmdline.intel_idle.max_cstate" "${USER_CONFIG_FILE}"
-          dialog --backtitle "$(backtitle)" --title "C-State Fix" \
-            --aspect 18 --msgbox "Fix uninstalled from Cmdline" 0 0
-        fi
+        while true; do
+          dialog --clear --backtitle "$(backtitle)" \
+            --title "C-State Fix" --menu "Fix?" 0 0 0 \
+            1 "Install" \
+            2 "Uninstall" \
+          2>"${TMP_PATH}/resp"
+          resp=$(cat ${TMP_PATH}/resp)
+          [ -z "${resp}" ] && break
+          if [ ${resp} -eq 1 ]; then
+            writeConfigKey "cmdline.intel_idle.max_cstate" "1" "${USER_CONFIG_FILE}"
+            dialog --backtitle "$(backtitle)" --title "C-State Fix" \
+              --aspect 18 --msgbox "Fix added to Cmdline" 0 0
+          elif [ ${resp} -eq 2 ]; then
+            deleteConfigKey "cmdline.intel_idle.max_cstate" "${USER_CONFIG_FILE}"
+            dialog --backtitle "$(backtitle)" --title "C-State Fix" \
+              --aspect 18 --msgbox "Fix uninstalled from Cmdline" 0 0
+          fi
+        done
         writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
         BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         ;;
@@ -456,18 +466,22 @@ function cmdlineMenu() {
           --aspect 18 --msgbox "${ITEMS}" 0 0
         ;;
       8)
-        rm -f "${TMP_PATH}/opts" >/dev/null
-        echo "5 \"Reboot after 5 seconds\"" >>"${TMP_PATH}/opts"
-        echo "0 \"No reboot\"" >>"${TMP_PATH}/opts"
-        echo "-1 \"Restart immediately\"" >>"${TMP_PATH}/opts"
-        dialog --backtitle "$(backtitle)" --colors --title "Kernelpanic" \
-          --default-item "${KERNELPANIC}" --menu "Choose a time(seconds)" 0 0 0 --file "${TMP_PATH}/opts" \
-          2>${TMP_PATH}/resp
-        [ $? -ne 0 ] && return 1
-        resp=$(cat ${TMP_PATH}/resp)
-        [ -z "${resp}" ] && return 1
-        KERNELPANIC=${resp}
-        writeConfigKey "arc.kernelpanic" "${KERNELPANIC}" "${USER_CONFIG_FILE}"
+        while true; do
+          rm -f "${TMP_PATH}/opts" >/dev/null
+          echo "5 \"Reboot after 5 seconds\"" >>"${TMP_PATH}/opts"
+          echo "0 \"No reboot\"" >>"${TMP_PATH}/opts"
+          echo "-1 \"Restart immediately\"" >>"${TMP_PATH}/opts"
+          dialog --backtitle "$(backtitle)" --colors --title "Kernelpanic" \
+            --default-item "${KERNELPANIC}" --menu "Choose a time(seconds)" 0 0 0 --file "${TMP_PATH}/opts" \
+            2>${TMP_PATH}/resp
+          [ $? -ne 0 ] && break
+          resp=$(cat ${TMP_PATH}/resp)
+          [ -z "${resp}" ] && break
+          KERNELPANIC=${resp}
+          writeConfigKey "arc.kernelpanic" "${KERNELPANIC}" "${USER_CONFIG_FILE}"
+        done
+        writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
+        BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         ;;
     esac
   done
@@ -477,20 +491,17 @@ function cmdlineMenu() {
 ###############################################################################
 # let user configure synoinfo entries
 function synoinfoMenu() {
-  # read synoinfo from user config
+  # Read synoinfo from user config
   unset SYNOINFO
   declare -A SYNOINFO
-  while IFS=': ' read -r KEY VALUE; do
+  while IFS=': ' read KEY VALUE; do
     [ -n "${KEY}" ] && SYNOINFO["${KEY}"]="${VALUE}"
   done < <(readConfigMap "synoinfo" "${USER_CONFIG_FILE}")
-
-  echo "1 \"Add/edit Synoinfo item\""     >"${TMP_PATH}/menu"
-  echo "2 \"Delete Synoinfo item(s)\""    >>"${TMP_PATH}/menu"
-  echo "3 \"Show Synoinfo entries\""      >>"${TMP_PATH}/menu"
-  echo "4 \"Add Trim/Dedup to Synoinfo\"" >>"${TMP_PATH}/menu"
-
   # menu loop
   while true; do
+    echo "1 \"Add/edit Synoinfo item\""     >"${TMP_PATH}/menu"
+    echo "2 \"Delete Synoinfo item(s)\""    >>"${TMP_PATH}/menu"
+    echo "3 \"Add Trim/Dedup to Synoinfo\"" >>"${TMP_PATH}/menu"
     dialog --backtitle "$(backtitle)" --cancel-label "Exit" --menu "Choose an Option" 0 0 0 \
       --file "${TMP_PATH}/menu" 2>"${TMP_PATH}/resp"
     [ $? -ne 0 ] && break
@@ -543,36 +554,35 @@ function synoinfoMenu() {
         BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         ;;
       2)
+        # Read synoinfo from user config
+        unset SYNOINFO
+        declare -A SYNOINFO
+        while IFS=': ' read KEY VALUE; do
+          [ -n "${KEY}" ] && SYNOINFO["${KEY}"]="${VALUE}"
+        done < <(readConfigMap "synoinfo" "${USER_CONFIG_FILE}")
         if [ ${#SYNOINFO[@]} -eq 0 ]; then
-          dialog --backtitle "$(backtitle)" --msgbox "No Synoinfo Entries to remove" 0 0
+          dialog --backtitle "$(backtitle)" --title "Synoinfo" \
+            --msgbox "No synoinfo entries to remove" 0 0
           continue
         fi
-        ITEMS=""
-        for I in "${!SYNOINFO[@]}"; do
-          [ -z "${SYNOINFO[${I}]}" ] && ITEMS+="${I} \"\" off " || ITEMS+="${I} ${SYNOINFO[${I}]} off "
+        rm -f "${TMP_PATH}/opts"
+        for I in ${!SYNOINFO[@]}; do
+          echo "\"${I}\" \"${SYNOINFO[${I}]}\" \"off\"" >>"${TMP_PATH}/opts"
         done
-        dialog --backtitle "$(backtitle)" \
-          --checklist "Select synoinfo entry to remove" 0 0 0 ${ITEMS} \
+        dialog --backtitle "$(backtitle)" --title "Synoinfo" \
+          --checklist "Select synoinfo entry to remove" 0 0 0 --file "${TMP_PATH}/opts" \
           2>"${TMP_PATH}/resp"
-        [ $? -ne 0 ] && return 1
-        resp=$(cat ${TMP_PATH}/resp)
-        [ -z "${resp}" ] && return 1
-        for I in ${resp}; do
-          unset 'SYNOINFO[${I}]'
+        [ $? -ne 0 ] && continue
+        RESP=$(cat "${TMP_PATH}/resp")
+        [ -z "${RESP}" ] && continue
+        for I in ${RESP}; do
+          unset SYNOINFO[${I}]
           deleteConfigKey "synoinfo.\"${I}\"" "${USER_CONFIG_FILE}"
         done
         writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
         BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         ;;
       3)
-        ITEMS=""
-        for KEY in ${!SYNOINFO[@]}; do
-          ITEMS+="${KEY}: ${SYNOINFO[$KEY]}\n"
-        done
-        dialog --backtitle "$(backtitle)" --title "Synoinfo Entries" \
-          --aspect 18 --msgbox "${ITEMS}" 0 0
-        ;;
-      4)
         # Optimized Synoinfo
         writeConfigKey "synoinfo.support_trim" "yes" "${USER_CONFIG_FILE}"
         writeConfigKey "synoinfo.support_disk_hibernation" "yes" "${USER_CONFIG_FILE}"
@@ -621,16 +631,19 @@ function storagepanelMenu() {
   CONFDONE="$(readConfigKey "arc.confdone" "${USER_CONFIG_FILE}")"
   if [ "${CONFDONE}" == "true" ]; then
     while true; do
+      STORAGEPANELUSER="$(readConfigKey "addons.storagepanel" "${USER_CONFIG_FILE}")"
+      [ -n "${STORAGEPANELUSER}" ] && DISKPANELUSER="$(echo ${STORAGEPANELUSER} | cut -d' ' -f1)" || DISKPANELUSER="RACK_24_Bay"
+      [ -n "${STORAGEPANELUSER}" ] && M2PANELUSER="$(echo ${STORAGEPANELUSER} | cut -d' ' -f2)" || M2PANELUSER="1X4"
       ITEMS="$(echo -e "RACK_2_Bay \nRACK_4_Bay \nRACK_8_Bay \nRACK_12_Bay \nRACK_16_Bay \nRACK_24_Bay \nRACK_60_Bay \nTOWER_1_Bay \nTOWER_2_Bay \nTOWER_4_Bay \nTOWER_6_Bay \nTOWER_8_Bay \nTOWER_12_Bay \n")"
       dialog --backtitle "$(backtitle)" --title "StoragePanel" \
-        --default-item "RACK_24_Bay" --no-items --menu "Choose a Disk Panel" 0 0 0 ${ITEMS} \
+        --default-item "${DISKPANELUSER}" --no-items --menu "Choose a Disk Panel" 0 0 0 ${ITEMS} \
         2>"${TMP_PATH}/resp"
       resp=$(cat ${TMP_PATH}/resp)
       [ -z "${resp}" ] && break
       STORAGE=${resp}
       ITEMS="$(echo -e "1X2 \n1X4 \n1X8 \n")"
       dialog --backtitle "$(backtitle)" --title "StoragePanel" \
-        --default-item "1X8" --no-items --menu "Choose a M.2 Panel" 0 0 0 ${ITEMS} \
+        --default-item "${M2PANELUSER}" --no-items --menu "Choose a M.2 Panel" 0 0 0 ${ITEMS} \
         2>"${TMP_PATH}/resp"
       resp=$(cat ${TMP_PATH}/resp)
       [ -z "${resp}" ] && break
