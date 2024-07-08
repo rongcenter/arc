@@ -251,8 +251,11 @@ function arcModel() {
   HDDSORT="$(readConfigKey "arc.hddsort" "${USER_CONFIG_FILE}")"
   KERNEL="$(readConfigKey "arc.kernel" "${USER_CONFIG_FILE}")"
   ODP="$(readConfigKey "arc.odp" "${USER_CONFIG_FILE}")"
-  if [ -f "${ORI_ZIMAGE_FILE}" ] || [ -f "${ORI_RDGZ_FILE}" ] || [ -f "${MOD_ZIMAGE_FILE}" ] || [ -f "${MOD_RDGZ_FILE}" ]; then
-    rm -f "${ORI_ZIMAGE_FILE}" "${ORI_RDGZ_FILE}" "${MOD_ZIMAGE_FILE}" "${MOD_RDGZ_FILE}" 2>/dev/null || true
+  if [ "${MODEL}" != "${resp}" ] || [ -z "${resp}" ]; then
+    if [ -f "${ORI_ZIMAGE_FILE}" ] || [ -f "${ORI_RDGZ_FILE}" ] || [ -f "${MOD_ZIMAGE_FILE}" ] || [ -f "${MOD_RDGZ_FILE}" ]; then
+      rm -f "${ORI_ZIMAGE_FILE}" "${ORI_RDGZ_FILE}" "${MOD_ZIMAGE_FILE}" "${MOD_RDGZ_FILE}" 2>/dev/null || true
+      rm -f "${PART1_PATH}/grub_cksum.syno" "${PART1_PATH}/GRUB_VER" "${PART2_PATH}/"* >/dev/null 2>&1 || true
+    fi
   fi
   arcVersion
 }
@@ -280,6 +283,7 @@ function arcVersion() {
       writeConfigKey "productver" "${PRODUCTVER}" "${USER_CONFIG_FILE}"
       # Delete old files
       rm -f "${ORI_ZIMAGE_FILE}" "${ORI_RDGZ_FILE}" "${MOD_ZIMAGE_FILE}" "${MOD_RDGZ_FILE}" 2>/dev/null || true
+      rm -f "${PART1_PATH}/grub_cksum.syno" "${PART1_PATH}/GRUB_VER" "${PART2_PATH}/"* >/dev/null 2>&1 || true
     fi
   fi
   dialog --backtitle "$(backtitle)" --title "Arc Config" \
@@ -306,18 +310,8 @@ function arcVersion() {
   fi
   # Rewrite modules
   writeConfigKey "modules" "{}" "${USER_CONFIG_FILE}"
-  cp -f "${ARC_PATH}/include/modulelist" "${USER_UP_PATH}/modulelist"
-  echo -e "\n\n# Arc Modules" >>"${USER_UP_PATH}/modulelist"
-  KOLIST=""
-  for I in $(lsmod | awk -F' ' '{print $1}' | grep -v 'Module'); do
-    KOLIST+="$(getdepends "${PLATFORM}" "${KVERP}" "${I}") ${I} "
-  done
-  KOLIST=($(echo ${KOLIST} | tr ' ' '\n' | sort -u))
   while read -r ID DESC; do
     writeConfigKey "modules.\"${ID}\"" "" "${USER_CONFIG_FILE}"
-    for MOD in ${KOLIST[@]}; do
-      [ "${MOD}" == "${ID}" ] && echo "N ${ID}.ko" >>"${USER_UP_PATH}/modulelist"
-    done
   done < <(getAllModules "${PLATFORM}" "${KVERP}")
   # Check for Only Version
   if [ "${ONLYVERSION}" == "true" ]; then
