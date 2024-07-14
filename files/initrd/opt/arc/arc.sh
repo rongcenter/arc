@@ -243,6 +243,10 @@ function arcModel() {
     writeConfigKey "platform" "${PLATFORM}" "${USER_CONFIG_FILE}"
     writeConfigKey "ramdisk-hash" "" "${USER_CONFIG_FILE}"
     writeConfigKey "zimage-hash" "" "${USER_CONFIG_FILE}"
+    if [ -f "${ORI_ZIMAGE_FILE}" ] || [ -f "${ORI_RDGZ_FILE}" ] || [ -f "${MOD_ZIMAGE_FILE}" ] || [ -f "${MOD_RDGZ_FILE}" ]; then
+      rm -f "${ORI_ZIMAGE_FILE}" "${ORI_RDGZ_FILE}" "${MOD_ZIMAGE_FILE}" "${MOD_RDGZ_FILE}" 2>/dev/null || true
+      rm -f "${PART1_PATH}/grub_cksum.syno" "${PART1_PATH}/GRUB_VER" "${PART2_PATH}/"* >/dev/null 2>&1 || true
+    fi
   fi
   ARCPATCH="$(readConfigKey "arc.patch" "${USER_CONFIG_FILE}")"
   BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
@@ -251,12 +255,6 @@ function arcModel() {
   HDDSORT="$(readConfigKey "hddsort" "${USER_CONFIG_FILE}")"
   KERNEL="$(readConfigKey "kernel" "${USER_CONFIG_FILE}")"
   ODP="$(readConfigKey "odp" "${USER_CONFIG_FILE}")"
-  if [ "${MODEL}" != "${resp}" ] || [ -z "${resp}" ]; then
-    if [ -f "${ORI_ZIMAGE_FILE}" ] || [ -f "${ORI_RDGZ_FILE}" ] || [ -f "${MOD_ZIMAGE_FILE}" ] || [ -f "${MOD_RDGZ_FILE}" ]; then
-      rm -f "${ORI_ZIMAGE_FILE}" "${ORI_RDGZ_FILE}" "${MOD_ZIMAGE_FILE}" "${MOD_RDGZ_FILE}" 2>/dev/null || true
-      rm -f "${PART1_PATH}/grub_cksum.syno" "${PART1_PATH}/GRUB_VER" "${PART2_PATH}/"* >/dev/null 2>&1 || true
-    fi
-  fi
   arcVersion
 }
 
@@ -336,8 +334,13 @@ function arcPatch() {
   # Check for Custom Build
   SN="$(readConfigKey "sn" "${USER_CONFIG_FILE}")"
   if [ "${AUTOMATED}" == "true" ] && [ -z "${SN}" ]; then
-    SN=$(generateSerial "${MODEL}" false)
-    writeConfigKey "arc.patch" "false" "${USER_CONFIG_FILE}"
+    if [ -n "${ARCCONF}" ]; then
+      SN=$(generateSerial "${MODEL}" true)
+      writeConfigKey "arc.patch" "true" "${USER_CONFIG_FILE}"
+    else
+      SN=$(generateSerial "${MODEL}" false)
+      writeConfigKey "arc.patch" "false" "${USER_CONFIG_FILE}"
+    fi
   elif [ "${AUTOMATED}" == "false" ]; then
     if [ -n "${ARCCONF}" ]; then
       dialog --clear --backtitle "$(backtitle)" \
@@ -570,9 +573,9 @@ function arcSummary() {
   SUMMARY+="\n>> AES | ACPI: \Zb${AESSYS} | ${ACPISYS}\Zn"
   SUMMARY+="\n>> CPU Scaling: \Zb${CPUFREQ}\Zn"
   SUMMARY+="\n>> NIC: \Zb${NIC}\Zn"
-  SUMMARY+="\n>> Disks (incl. USB): \Zb${DRIVES}\Zn"
-  SUMMARY+="\n>> Disks (internal): \Zb${HARDDRIVES}\Zn"
-  SUMMARY+="\n>> External Controller: \Zb${EXTERNALCONTROLLER}\Zn"
+  SUMMARY+="\n>> Total Disks: \Zb${DRIVES}\Zn"
+  SUMMARY+="\n>> Internal Disks: \Zb${HARDDRIVES}\Zn"
+  SUMMARY+="\n>> Additional Controller: \Zb${EXTERNALCONTROLLER}\Zn"
   SUMMARY+="\n>> Memory: \Zb${RAMTOTAL}GB\Zn"
   dialog --backtitle "$(backtitle)" --colors --title "DSM Config Summary" \
     --extra-button --extra-label "Cancel" --msgbox "${SUMMARY}" 0 0
@@ -807,17 +810,10 @@ function make() {
 ###############################################################################
 # Finish Building Loader
 function arcFinish() {
-  # Verify Files exist
-  AUTOMATED="$(readConfigKey "automated" "${USER_CONFIG_FILE}")"
   rm -f "${LOG_FILE}" >/dev/null
-  # Check for Automated Mode
-  if grep -q "automated_arc" /proc/cmdline; then
+  if [ "${AUTOMATED}" == "true" ]; then
     boot
-  elif [ "${AUTOMATED}" == "true" ]; then
-    [ ! -f "${PART3_PATH}/automated" ] && echo "${ARC_VERSION}-${MODEL}-${PRODUCTVER}-custom" >"${PART3_PATH}/automated"
-    boot
-  elif [ "${AUTOMATED}" == "false" ]; then
-    [ -f "${PART3_PATH}/automated" ] && rm -f "${PART3_PATH}/automated" >/dev/null
+  else
     # Ask for Boot
     dialog --clear --backtitle "$(backtitle)" --title "Build done"\
       --no-cancel --menu "Boot now?" 7 40 0 \
@@ -868,9 +864,9 @@ function boot() {
 ###############################################################################
 # Main loop
 # Check for Automated Mode
-if grep -q "automated_arc" /proc/cmdline; then
+if [ "${AUTOMATED}" == "true" ]; then
   # Check for Custom Build
-  if [ "${AUTOMATED}" == "true" ]; then
+  if [ "${BUILDDONE}" == "false" ] || [ "${MODEL}" != "${MODELID}" ]; then
     arcModel
   else
     make
@@ -972,9 +968,6 @@ else
     if [ "${LOADEROPTS}" == "true" ]; then
       echo "= \"\Z4========= Loader =========\Zn \" "                                         >>"${TMP_PATH}/menu"
       echo "= \"\Z4=== Edit with caution! ===\Zn \" "                                         >>"${TMP_PATH}/menu"
-      if [ "${OFFLINE}" == "false" ]; then
-        echo "R \"Automated Mode: \Z4${AUTOMATED}\Zn \" "                                     >>"${TMP_PATH}/menu"
-      fi
       echo "W \"RD Compression: \Z4${RD_COMPRESSED}\Zn \" "                                   >>"${TMP_PATH}/menu"
       echo "X \"Sata DOM: \Z4${SATADOM}\Zn \" "                                               >>"${TMP_PATH}/menu"
       echo "u \"Switch LKM Version: \Z4${LKM}\Zn \" "                                         >>"${TMP_PATH}/menu"
@@ -1031,15 +1024,6 @@ else
       Q) sequentialIOMenu; NEXT="Q" ;;
       p) ONLYPATCH="true" && arcPatch; NEXT="p" ;;
       D) staticIPMenu; NEXT="D" ;;
-      R) [ "${AUTOMATED}" == "false" ] && AUTOMATED='true' || AUTOMATED='false'
-        writeConfigKey "automated" "${AUTOMATED}" "${USER_CONFIG_FILE}"
-        if [ "${AUTOMATED}" == "true" ]; then
-          [ ! -f "${PART3_PATH}/automated" ] && echo "${ARC_VERSION}-${MODEL}-${PRODUCTVER}-custom" >"${PART3_PATH}/automated"
-        elif [ "${AUTOMATED}" == "false" ]; then
-          [ -f "${PART3_PATH}/automated" ] && rm -f "${PART3_PATH}/automated" >/dev/null
-        fi
-        NEXT="R"
-        ;;
       # Boot Section
       6) [ "${BOOTOPTS}" == "true" ] && BOOTOPTS='false' || BOOTOPTS='true'
         BOOTOPTS="${BOOTOPTS}"
