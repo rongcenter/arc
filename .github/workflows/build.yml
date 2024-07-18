@@ -11,13 +11,17 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "format %y.%-m.$i or auto"
+        description: "format %y.%m.$d or auto"
         required: false
         type: string
       notice:
         description: "Notice here"
         required: false
         type: string
+      latest:
+        description: "latest"
+        default: true
+        type: boolean
       prerelease:
         description: "pre release"
         default: false
@@ -26,29 +30,9 @@ on:
         description: "clean"
         default: false
         type: boolean
-      addons_version:
-        description: "addons version"
-        default: ""
-        type: string
-      configs_version:
-        description: "configs version"
-        default: ""
-        type: string
-      modules_version:
-        description: "modules version"
-        default: ""
-        type: string
-      lkm_version:
-        description: "lkm version"
-        default: ""
-        type: string
-      patches_version:
-        description: "patches version"
-        default: ""
-        type: string
-      theme_version:
-        description: "theme version"
-        default: ""
+      update_version:
+        description: "update min version"
+        default: "24.07.12"
         type: string
 
 jobs:
@@ -90,12 +74,7 @@ jobs:
           if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
           else
-            LATEST_TAG="$(curl -skL "https://api.github.com/repos/${{ github.repository }}/releases/latest" | jq -r ".tag_name" 2>/dev/null)"
-            if [[ -n "${LATEST_TAG}" && "`echo ${LATEST_TAG} | cut -d '.' -f 1,2`" = "`date +'%y.%-m.%-d'`" ]]; then  # format %y.%-m.$i
-              VERSION="`echo ${LATEST_TAG} | awk -F '.' '{$3=$3+1}1' OFS='.'`"
-            else
-              VERSION="`date +'%y.%-m.%-d'`"
-            fi
+            VERSION="`date +'%y.%m.%d'`"
           fi
           
           echo "Version: ${VERSION}"
@@ -113,26 +92,19 @@ jobs:
         run: |
           . scripts/func.sh
 
-          LKMTAG="${{ inputs.lkm_version }}"
           getLKMs "files/p3/lkms"
           echo "LKMTAG=${TAG}" >> $GITHUB_ENV
-          ADDONSTAG="${{ inputs.addons_version }}"
           getAddons "files/p3/addons"
           echo "ADDONSTAG=${TAG}" >> $GITHUB_ENV
-          MODULESTAG="${{ inputs.modules_version }}"
           getModules "files/p3/modules"
           echo "MODULESTAG=${TAG}" >> $GITHUB_ENV
-          CONFIGSTAG="${{ inputs.configs_version }}"
           getConfigs "files/p3/configs"
           echo "CONFIGSTAG=${TAG}" >> $GITHUB_ENV
-          PATCHESTAG="${{ inputs.patches_version }}"
           getPatches "files/p3/patches"
           echo "PATCHESTAG=${TAG}" >> $GITHUB_ENV
-          THEMETAG="${{ inputs.theme_version }}"
           getTheme "files/p1/boot/grub"
           echo "THEMETAG=${TAG}" >> $GITHUB_ENV
           getOffline "files/p3/configs"
-          echo "Get Buildroot"
           getBuildroot "latest" "br"
           echo "BR_VERSION=${TAG}" >> $GITHUB_ENV
           echo "BUILD_TIME=$(date +'%Y-%m-%d %H:%M')" >> $GITHUB_ENV
@@ -140,7 +112,7 @@ jobs:
           echo "OK"
 
       # Build incremental
-      - name: Build Image
+      - name: Build Image New
         run: |
           . scripts/func.sh
 
@@ -177,43 +149,30 @@ jobs:
 
           sudo losetup --detach ${LOOPX}
 
-          #resizeImg "arc.img" "+1024M" "arc-2G.img"
-          #mv -f "arc-2G.img" "arc.img"
-
           echo "Image Converter"
-          qemu-img convert arc.img -O vmdk -o adapter_type=lsilogic,compat6 arc-dyn.vmdk
-          qemu-img convert arc.img -O vmdk -o adapter_type=lsilogic,subformat=monolithicFlat,compat6 arc.vmdk
-          qemu-img convert arc.img -O vhdx -o subformat=dynamic arc.vhdx
+          qemu-img convert ${IMAGE_FILE} -O vmdk -o adapter_type=lsilogic,compat6 arc-dyn.vmdk
+          qemu-img convert ${IMAGE_FILE} -O vmdk -o adapter_type=lsilogic,subformat=monolithicFlat,compat6 arc.vmdk
+          qemu-img convert ${IMAGE_FILE} -O vhdx -o subformat=dynamic arc.vhdx
 
           echo "Create Arc ova"
           convertova "arc.img" "arc.ova"
+
+          zip -9 update.zip "files/p3/bzImage-arc" "files/p3/initrd-arc" "files/p1/ARC-VERSION" "files/p1/boot/grub/grub.cfg"
+          sha256sum update.zip >checksum.sha256
+          rm -f "files/p3/bzImage-arc" "files/p3/initrd-arc"
 
       # Zip image and generate checksum
       - name: Pack
         run: |
           if [ -n "${{ env.VERSION }}" ]; then
+            # NBase
             zip -9 "arc-${{ env.VERSION }}.img.zip" arc.img
             zip -9 "arc-${{ env.VERSION }}.vmdk-dyn.zip" arc-dyn.vmdk
             zip -9 "arc-${{ env.VERSION }}.vmdk-flat.zip" arc.vmdk arc-flat.vmdk
             zip -9 "arc-${{ env.VERSION }}.vhdx.zip" arc.vhdx
             zip -9 "arc-${{ env.VERSION }}.ova.zip" arc.ova
-          else
-            zip -9 "arc.img.zip" arc.img
           fi
-          zip -9j update.zip "files/p3/bzImage-arc" "files/p3/initrd-arc" "files/p1/ARC-VERSION" "files/p1/boot/grub/grub.cfg"
-          sha256sum update.zip >checksum.sha256
-
-      # Upload artifact
-      - name: Upload
-        if: success() && env.VERSION == ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: Images
-          path: |
-            arc.img.zip
-            update.zip
-            checksum.sha256
-          retention-days: 5
+          echo "${{ inputs.update_version }}" >check.update
 
       # Publish a release if is a tag
       - name: Release
@@ -222,6 +181,7 @@ jobs:
         with:
           tag: ${{ env.VERSION }}
           prerelease: ${{ inputs.prerelease }}
+          makeLatest: ${{ inputs.latest }}
           allowUpdates: true
           body: |
             ### Information:
@@ -241,3 +201,4 @@ jobs:
             arc-*.zip
             update.zip
             checksum.sha256
+            check.update
