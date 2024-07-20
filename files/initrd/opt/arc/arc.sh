@@ -137,8 +137,7 @@ function arcModel() {
         [ "${DT}" == "false" ] && USBS="int/ext" || USBS="ext"
         [[ "${M}" == "DS918+" || "${M}" == "DS1019+" || "${M}" == "DS1621xs+" || "${M}" == "RS1619xs+" ]] && M_2_CACHE="+" || M_2_CACHE="x"
         [[ "${M}" == "DS220+" ||  "${M}" == "DS224+" ]] && M_2_CACHE=""
-        [ "${DT}" == "false" ] && M_2_STORAGE="" || M_2_STORAGE="+"
-        [[ "${M}" == "DS220+" || "${M}" == "DS224+" ]] && M_2_STORAGE=""
+        [[ "${M}" == "DS220+" || "${M}" == "DS224+" || "${M}" == "DS918+" || "${M}" == "DS1019+" || "${M}" == "DS1621xs+" || "${M}" == "RS1619xs+" ]] && M_2_STORAGE="" || M_2_STORAGE="+"
         # Check id model is compatible with CPU
         if [ ${RESTRICT} -eq 1 ]; then
           for F in "${FLAGS}"; do
@@ -197,7 +196,7 @@ function arcModel() {
           resp=$(cat ${TMP_PATH}/resp)
           PLATFORM="$(grep -w "${resp}" "${TMP_PATH}/modellist" | awk '{print $2}' | head -n 1)"
           dialog --backtitle "$(backtitle)" --colors \
-            --title "Platform Info" --textbox "./informations/${PLATFORM}.yml" 15 80
+            --title "Platform Info" --textbox "./informations/${PLATFORM}.yml" 70 80
           ;;
         255) # ESC -> Exit
           return 1
