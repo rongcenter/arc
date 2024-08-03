@@ -71,12 +71,8 @@ dynCheck
 ###############################################################################
 # Mounts backtitle dynamically
 function backtitle() {
-  if [ "${ARCDYN}" == "true" ]; then
-    ARC_TITLE="Dynamic"
-  else
-    if [ -n "${NEWTAG}" ] && [ "${NEWTAG}" != "${ARC_VERSION}" ]; then
-      ARC_TITLE="${ARC_TITLE} > ${NEWTAG}"
-    fi
+  if [ -n "${NEWTAG}" ] && [ "${NEWTAG}" != "${ARC_VERSION}" ]; then
+    ARC_TITLE="${ARC_TITLE} > ${NEWTAG}"
   fi
   if [ -z "${MODEL}" ]; then
     MODEL="(Model)"
@@ -993,7 +989,7 @@ else
       echo "v \"Write Loader Modifications to Disk \" "                                       >>"${TMP_PATH}/menu"
       echo "n \"Grub Bootloader Config \" "                                                   >>"${TMP_PATH}/menu"
       if [ "${OFFLINE}" == "false" ]; then
-        echo "Y \"Arc dynamic Loading: \Z4${ARCDYN}\Zn \" "                                   >>"${TMP_PATH}/menu"
+        echo "Y \"Arc Dev Mode: \Z4${ARCDYN}\Zn \" "                                          >>"${TMP_PATH}/menu"
       fi
       echo "F \"\Z1Formate Disks \Zn \" "                                                     >>"${TMP_PATH}/menu"
       if [ "${OFFLINE}" == "false" ]; then
@@ -1150,6 +1146,7 @@ else
       C) cloneLoader; NEXT="C" ;;
       Y) [ "${ARCDYN}" == "false" ] && ARCDYN='true' || ARCDYN='false'
         writeConfigKey "arc.dynamic" "${ARCDYN}" "${USER_CONFIG_FILE}"
+        rm -f "${TMP_PATH}/dynamic" >/dev/null 2>&1 || true
         dynCheck
         NEXT="Y"
         ;;
