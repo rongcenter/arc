@@ -831,6 +831,8 @@ function updateMenu() {
       6 "Update LKMs" \
       7 "Update Modules" \
       8 "Update Patches" \
+      9 "Update Custom Kernel" \
+      0 "Switch Buildroot" \
       2>"${TMP_PATH}/resp"
     [ $? -ne 0 ] && break
     case "$(cat ${TMP_PATH}/resp)" in
@@ -842,9 +844,11 @@ function updateMenu() {
       2)
         # Ask for Tag
         TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${PART1_PATH}/ARC-VERSION)"
         dialog --clear --backtitle "$(backtitle)" --title "Upgrade Loader" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
         [ $? -ne 0 ] && continue
@@ -867,9 +871,11 @@ function updateMenu() {
       3)
         # Ask for Tag
         TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${PART1_PATH}/ARC-VERSION)"
         dialog --clear --backtitle "$(backtitle)" --title "Update Loader" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
         [ $? -ne 0 ] && continue
@@ -891,9 +897,11 @@ function updateMenu() {
       4)
         # Ask for Tag
         TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc-addons/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${ADDONS_PATH}/VERSION)"
         dialog --clear --backtitle "$(backtitle)" --title "Update Addons" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
         [ $? -ne 0 ] && continue
@@ -915,9 +923,11 @@ function updateMenu() {
       5)
         # Ask for Tag
         TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc-configs/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${MODEL_CONFIG_PATH}/VERSION)"
         dialog --clear --backtitle "$(backtitle)" --title "Update Configs" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
         opts=$(cat ${TMP_PATH}/opts)
@@ -940,9 +950,11 @@ function updateMenu() {
       6)
         # Ask for Tag
         TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc-lkm/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${LKMS_PATH}/VERSION)"
         dialog --clear --backtitle "$(backtitle)" --title "Update LKMs" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
         opts=$(cat ${TMP_PATH}/opts)
@@ -963,9 +975,11 @@ function updateMenu() {
       7)
         # Ask for Tag
         TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc-modules/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${MODULES_PATH}/VERSION)"
         dialog --clear --backtitle "$(backtitle)" --title "Update Modules" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
         opts=$(cat ${TMP_PATH}/opts)
@@ -986,10 +1000,13 @@ function updateMenu() {
       8)
         # Ask for Tag
         TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc-patches/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${PATCH_PATH}/VERSION)"
         dialog --clear --backtitle "$(backtitle)" --title "Update Patches" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
+        2>"${TMP_PATH}/opts"
         2>"${TMP_PATH}/opts"
         opts=$(cat ${TMP_PATH}/opts)
         [ -z "${opts}" ] && return 1
@@ -1003,6 +1020,51 @@ function updateMenu() {
           [ -z "${TAG}" ] && return 1
         fi
         updatePatches "${TAG}"
+        writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
+        BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
+        ;;
+      9)
+        # Ask for Tag
+        TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc-custom/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${CUSTOM_PATH}/VERSION)"
+        dialog --clear --backtitle "$(backtitle)" --title "Update Custom" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
+          2 "Select Version" \
+        2>"${TMP_PATH}/opts"
+        opts=$(cat ${TMP_PATH}/opts)
+        [ -z "${opts}" ] && return 1
+        if [ ${opts} -eq 1 ]; then
+          TAG=""
+        elif [ ${opts} -eq 2 ]; then
+          dialog --backtitle "$(backtitle)" --title "Update Custom Kernel" \
+          --inputbox "Type the Version!" 0 0 \
+          2>"${TMP_PATH}/input"
+          TAG=$(cat "${TMP_PATH}/input")
+          [ -z "${TAG}" ] && return 1
+        fi
+        updateCustom "${TAG}"
+        writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
+        BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
+        ;;
+      0)
+        # Ask for Arc Branch
+        dialog --clear --backtitle "$(backtitle)" --title "Switch Buildsystem" \
+          --menu "Which Branch?" 7 50 0 \
+          1 "x - latest Buildsystem" \
+          2 "s - stable Buildsystem" \
+        2>"${TMP_PATH}/opts"
+        opts=$(cat ${TMP_PATH}/opts)
+        [ -z "${opts}" ] && return 1
+        if [ ${opts} -eq 1 ]; then
+          writeConfigKey "arc.branch" "" "${USER_CONFIG_FILE}"
+        elif [ ${opts} -eq 2 ]; then
+          writeConfigKey "arc.branch" "s" "${USER_CONFIG_FILE}"
+        fi
+        ARCBRANCH="$(readConfigKey "arc.branch" "${USER_CONFIG_FILE}")"
+        dialog --backtitle "$(backtitle)" --title "Switch Buildsystem" --aspect 18 \
+          --msgbox "Updates are using ${ARCBRANCH} Branch.\nYou need to Update the Loader now!" 0 0
         writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
         BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         ;;
@@ -1047,6 +1109,7 @@ function sysinfo() {
   VENDOR=$(dmesg 2>/dev/null | grep -i "DMI:" | sed 's/\[.*\] DMI: //i')
   ETHX="$(ls /sys/class/net/ 2>/dev/null | grep eth)"
   ETHN="$(echo ${ETHX} | wc -w)"
+  ARCBRANCH="$(readConfigKey "arc.branch" "${USER_CONFIG_FILE}")"
   CONFDONE="$(readConfigKey "arc.confdone" "${USER_CONFIG_FILE}")"
   BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
   if [ "${CONFDONE}" == "true" ]; then
@@ -1067,6 +1130,8 @@ function sysinfo() {
     elif [ "${REMAP}" == "ahci" ]; then
       PORTMAP="$(readConfigKey "cmdline.ahci_remap" "${USER_CONFIG_FILE}")"
     fi
+    USERCMDLINEINFO="$(readConfigMap "cmdline" "${USER_CONFIG_FILE}")"
+    USERSYNOINFO="$(readConfigMap "synoinfo" "${USER_CONFIG_FILE}")"
   fi
   DIRECTBOOT="$(readConfigKey "directboot" "${USER_CONFIG_FILE}")"
   LKM="$(readConfigKey "lkm" "${USER_CONFIG_FILE}")"
@@ -1141,7 +1206,7 @@ function sysinfo() {
     TEXT+="\n\Zb$(lspci -s ${NETBUS} -nnk | awk '{$1=""}1' | awk '{$1=$1};1')\Zn\n"
   done
   # Print Config Informations
-  TEXT+="\n\Z4> Arc: ${ARC_VERSION}\Zn"
+  TEXT+="\n\Z4> Arc: ${ARC_VERSION} | Branch: ${ARCBRANCH:-x}\Zn"
   TEXT+="\n  Subversion: \ZbAddons ${ADDONSVERSION} | Configs ${CONFIGSVERSION} | LKM ${LKMVERSION} | Modules ${MODULESVERSION} | Patches ${PATCHESVERSION}\Zn"
   TEXT+="\n  Config | Build: \Zb${CONFDONE} | ${BUILDDONE}\Zn"
   TEXT+="\n  Config Version: \Zb${CONFIGVER}\Zn"
@@ -1154,6 +1219,11 @@ function sysinfo() {
     TEXT+="\n  Addons selected: \Zb${ADDONSINFO}\Zn"
   fi
   TEXT+="\n  Modules loaded: \Zb${MODULESINFO}\Zn"
+  if [ "${CONFDONE}" == "true" ]; then
+    TEXT+="\n  User Cmdline: \Zb${USERCMDLINEINFO}\Zn"
+    TEXT+="\n  User Synoinfo: \Zb${USERSYNOINFO}\Zn"
+  fi
+  TEXT+="\n"
   TEXT+="\n\Z4> Settings\Zn"
   TEXT+="\n  Offline Mode: \Zb${OFFLINE}\Zn"
   if [[ "${REMAP}" == "acports" || "${REMAP}" == "maxports" ]]; then
@@ -1707,6 +1777,7 @@ function forcessh() {
   fi
   (
     ONBOOTUP=""
+    ONBOOTUP="${ONBOOTUP}systemctl restart inetd\n"
     ONBOOTUP="${ONBOOTUP}synowebapi --exec api=SYNO.Core.Terminal method=set version=3 enable_telnet=true enable_ssh=true ssh_port=22 forbid_console=false\n"
     ONBOOTUP="${ONBOOTUP}echo \"DELETE FROM task WHERE task_name LIKE ''ARCONBOOTUPARC_SSH'';\" | sqlite3 /usr/syno/etc/esynoscheduler/esynoscheduler.db\n"
     mkdir -p "${TMP_PATH}/mdX"
@@ -1837,29 +1908,71 @@ function editGrubCfg() {
 ###############################################################################
 # Grep Logs from dbgutils
 function greplogs() {
+  rm -rf "${TMP_PATH}/logs" "${TMP_PATH}/logs.tar.gz"
+  MSG=""
+  SYSLOG=0
+  DSMROOTS="$(findDSMRoot)"
+  if [ -n "${DSMROOTS}" ]; then
+    mkdir -p "${TMP_PATH}/mdX"
+    for I in ${DSMROOTS}; do
+      mount -t ext4 "${I}" "${TMP_PATH}/mdX"
+      [ $? -ne 0 ] && continue
+      mkdir -p "${TMP_PATH}/logs/md0/log"
+      cp -rf ${TMP_PATH}/mdX/.log.junior "${TMP_PATH}/logs/md0"
+      cp -rf ${TMP_PATH}/mdX/var/log/messages ${TMP_PATH}/mdX/var/log/*.log "${TMP_PATH}/logs/md0/log"
+      SYSLOG=1
+      umount "${TMP_PATH}/mdX"
+    done
+    rm -rf "${TMP_PATH}/mdX"
+  fi
+  if [ ${SYSLOG} -eq 1 ]; then
+    MSG+="System logs found!\n"
+  else
+    MSG+="Can't find system logs!\n"
+  fi
+
+  PSTORE=0
+  if [ -n "$(ls /sys/fs/pstore 2>/dev/null)" ]; then
+    mkdir -p "${TMP_PATH}/logs/pstore"
+    cp -rf /sys/fs/pstore/* "${TMP_PATH}/logs/pstore"
+    zlib-flate -uncompress </sys/fs/pstore/*.z >"${TMP_PATH}/logs/pstore/ps.log" 2>/dev/null
+    PSTORE=1
+  fi
+  if [ ${PSTORE} -eq 1 ]; then
+    MSG+="Pstore logs found!\n"
+  else
+    MSG+="Can't find pstore logs!\n"
+  fi
+
+  ADDONS=0
   if [ -d "${PART1_PATH}/logs" ]; then
-    rm -f "${TMP_PATH}/logs.tar.gz"
-    tar -czf "${TMP_PATH}/logs.tar.gz" -C "${PART1_PATH}/logs"
+    mkdir -p "${TMP_PATH}/logs/addons"
+    cp -rf "${PART1_PATH}/logs"/* "${TMP_PATH}/logs/addons"
+    ADDONS=1
+  fi
+  if [ ${ADDONS} -eq 1 ]; then
+    MSG+="Addons logs found!\n"
+  else
+    MSG+="Can't find Addon logs!\n"
+    MSG+="Please do as follows:\n"
+    MSG+="1. Add dbgutils in addons and rebuild.\n"
+    MSG+="2. Wait 10 minutes after booting.\n"
+    MSG+="3. Reboot into Arc and go to this option.\n"
+  fi
+
+  if [ -n "$(ls -A ${TMP_PATH}/logs 2>/dev/null)" ]; then
+    tar -czf "${TMP_PATH}/logs.tar.gz" -C "${TMP_PATH}" logs
     if [ -z "${SSH_TTY}" ]; then # web
       mv -f "${TMP_PATH}/logs.tar.gz" "/var/www/data/logs.tar.gz"
       URL="http://$(getIP)/logs.tar.gz"
-      dialog --backtitle "$(backtitle)" --colors --title "Grep Logs" \
-        --msgbox "Please visit ${URL}\nto download the logs and unzip it and back it up in order by file name." 0 0
+      MSG+="Please via ${URL} to download the logs,\nAnd go to Github or Discord to create an issue and upload the logs."
     else
-      sz -be -B 536870912 "${TMP_PATH}/log.tar.gz"
-      dialog --backtitle "$(backtitle)" --colors --title "Grep Logs" \
-        --msgbox "Please unzip it and back it up in order by file name." 0 0
+      sz -be -B 536870912 "${TMP_PATH}/logs.tar.gz"
+      MSG+="Please go to Github or Discord to create an issue and upload the logs."
     fi
-  else
-    MSG=""
-    MSG+="\Z1No log found!\Zn\n\n"
-    MSG+="Please do as follows:\n"
-    MSG+=" 1. Add dbgutils in Addons and rebuild.\n"
-    MSG+=" 2. Boot to DSM.\n"
-    MSG+=" 3. Reboot to Config Mode and use this Option.\n"
-    dialog --backtitle "$(backtitle)" --colors --title "Grep Logs" \
-      --msgbox "${MSG}" 0 0
   fi
+  dialog --backtitle "$(backtitle)" --colors --title "Grep Logs" \
+    --msgbox "${MSG}" 0 0
   return
 }
 
@@ -1928,21 +2041,17 @@ function decryptMenu() {
         --msgbox "Decrypt successful: You can use Arc Patch." 5 50
       cp -f "${S_FILE_ARC}" "${S_FILE}"
       writeConfigKey "arc.key" "${ARC_KEY}" "${USER_CONFIG_FILE}"
-      writeConfigKey "arc.confdone" "false" "${USER_CONFIG_FILE}"
-      CONFDONE="$(readConfigKey "arc.confdone" "${USER_CONFIG_FILE}")"
-      writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
-      BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
     else
       cp -f "${S_FILE}.bak" "${S_FILE}"
       dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
         --msgbox "Decrypt failed: Wrong Key for this Version." 5 50
       writeConfigKey "arc.key" "" "${USER_CONFIG_FILE}"
-      writeConfigKey "arc.confdone" "false" "${USER_CONFIG_FILE}"
-      CONFDONE="$(readConfigKey "arc.confdone" "${USER_CONFIG_FILE}")"
-      writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
-      BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
     fi
   fi
+  writeConfigKey "arc.confdone" "false" "${USER_CONFIG_FILE}"
+  CONFDONE="$(readConfigKey "arc.confdone" "${USER_CONFIG_FILE}")"
+  writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
+  BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
   ARC_KEY="$(readConfigKey "arc.key" "${USER_CONFIG_FILE}")"
   return
 }
@@ -1977,17 +2086,17 @@ function rebootMenu() {
   rm -f "${TMP_PATH}/opts" >/dev/null
   touch "${TMP_PATH}/opts"
   # Selectable Reboot Options
-  echo -e "config \"Config Mode\"" >>"${TMP_PATH}/opts"
-  echo -e "update \"Automated Update Mode\"" >>"${TMP_PATH}/opts"
-  echo -e "recovery \"Recovery Mode\"" >>"${TMP_PATH}/opts"
-  echo -e "junior \"Reinstall Mode\"" >>"${TMP_PATH}/opts"
-  if efibootmgr | grep -q "^Boot0000"; then
-    echo -e "bios \"BIOS/UEFI\"" >>"${TMP_PATH}/opts"
+  echo -e "config \"Arc: Config Mode\"" >>"${TMP_PATH}/opts"
+  echo -e "update \"Arc: Automated Update Mode\"" >>"${TMP_PATH}/opts"
+  echo -e "init \"Arc: Restart Loader Init\"" >>"${TMP_PATH}/opts"
+  echo -e "network \"Arc: Restart Network Service\"" >>"${TMP_PATH}/opts"
+  echo -e "recovery \"DSM: Recovery Mode\"" >>"${TMP_PATH}/opts"
+  echo -e "junior \"DSM: Reinstall Mode\"" >>"${TMP_PATH}/opts"
+  if efibootmgr 2>/dev/null | grep -q "^Boot0000"; then
+    echo -e "bios \"System: BIOS/UEFI\"" >>"${TMP_PATH}/opts"
   fi
-  echo -e "poweroff \"Shutdown\"" >>"${TMP_PATH}/opts"
-  echo -e "shell \"Exit to Shell Cmdline\"" >>"${TMP_PATH}/opts"
-  echo -e "init \"Restart Loader Init\"" >>"${TMP_PATH}/opts"
-  echo -e "network \"Restart Network Service\"" >>"${TMP_PATH}/opts"
+  echo -e "poweroff \"System: Shutdown\"" >>"${TMP_PATH}/opts"
+  echo -e "shell \"System: Shell Cmdline\"" >>"${TMP_PATH}/opts"
   dialog --backtitle "$(backtitle)" --title "Power Menu" \
     --menu  "Choose a Destination" 0 0 0 --file "${TMP_PATH}/opts" \
     2>${TMP_PATH}/resp

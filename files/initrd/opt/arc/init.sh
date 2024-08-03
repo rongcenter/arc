@@ -10,6 +10,7 @@ set -e
 
 # Get Loader Disk Bus
 [ -z "${LOADER_DISK}" ] && die "Loader Disk not found!"
+checkBootLoader || die "The loader is corrupted, please rewrite it!"
 BUS=$(getBus "${LOADER_DISK}")
 
 # Check if machine has EFI
@@ -39,6 +40,7 @@ initConfigKey "addons" "{}" "${USER_CONFIG_FILE}"
 initConfigKey "arc" "{}" "${USER_CONFIG_FILE}"
 initConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
 initConfigKey "arc.confdone" "false" "${USER_CONFIG_FILE}"
+initConfigKey "arc.dynamic" "false" "${USER_CONFIG_FILE}"
 initConfigKey "arc.ipv6" "false" "${USER_CONFIG_FILE}"
 initConfigKey "arc.key" "" "${USER_CONFIG_FILE}"
 initConfigKey "arc.nic" "" "${USER_CONFIG_FILE}"
@@ -82,7 +84,8 @@ if grep -q "automated_arc" /proc/cmdline; then
 else
   writeConfigKey "automated" "false" "${USER_CONFIG_FILE}"
 fi
-[ -f "${PART3_PATH}/automated" ] && rm -f "${PART3_PATH}/automated" >/dev/null
+[ $(echo "${ARC_VERSION}" | grep -q "s" | wc -l) -gt 0 ] && writeConfigKey "arc.branch" "s" "${USER_CONFIG_FILE}" || writeConfigKey "arc.branch" "" "${USER_CONFIG_FILE}"
+[ -f "${PART3_PATH}/automated" ] && rm -f "${PART3_PATH}/automated" >/dev/null 2>&1 || true
 # Check for compatibility
 compatboot
 
@@ -110,6 +113,7 @@ for ETH in ${ETHX}; do
     sleep 1
   fi
   [ "${ETH::3}" = "eth" ] && ethtool -s ${ETH} wol g 2>/dev/null || true
+  [ "${ETH::3}" = "eth" ] && ethtool -K ${ETH} rxhash off 2>/dev/null || true
   initConfigKey "${ETH}" "${MACR}" "${USER_CONFIG_FILE}"
 done
 ETHN="$(echo ${ETHX} | wc -w)"

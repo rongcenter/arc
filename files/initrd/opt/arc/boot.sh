@@ -7,18 +7,6 @@ function bootDSM () {
   # Check if machine has EFI
   [ -d /sys/firmware/efi ] && EFI=1 || EFI=0
 
-  # Proc open nvidia driver when booting
-  NVPCI_ADDR=$(lspci -nd 10de: | grep -e 0300 -e 0302 | awk '{print $1}')
-  if [ -n "${NVPCI_ADDR}" ]; then
-    modprobe -r nouveau || true
-    NVDEV_PATH=$(find /sys/devices -name *${NVPCI_ADDR} | grep  -v supplier)
-    for DEV_PATH in ${NVDEV_PATH}
-    do
-      if [ -e ${DEV_PATH}/reset ]; then
-            echo 1 > ${DEV_PATH}/reset || true
-      fi
-    done
-  fi
   # Print Title centralized
   clear
   COLUMNS=${COLUMNS:-50}
@@ -128,7 +116,7 @@ function bootDSM () {
     CMDLINE["syno_ttyS0"]="serial,0x3f8"
     CMDLINE["syno_ttyS1"]="serial,0x2f8"
   else
-    # CMDLINE["SMBusHddDynamicPower"]="1"
+    CMDLINE["SMBusHddDynamicPower"]="1"
     CMDLINE["syno_hdd_detect"]="0"
     CMDLINE["syno_hdd_powerup_seq"]="0"
   fi
@@ -140,7 +128,7 @@ function bootDSM () {
   CMDLINE['earlycon']="uart8250,io,0x3f8,115200n8"
   CMDLINE['console']="ttyS0,115200n8"
   CMDLINE['consoleblank']="600"
-  CMDLINE['no_console_suspend']="1"
+  # CMDLINE['no_console_suspend']="1"
   CMDLINE['root']="/dev/md0"
   CMDLINE['rootwait']=""
   CMDLINE['loglevel']="15"
@@ -161,10 +149,8 @@ function bootDSM () {
       CMDLINE['modprobe.blacklist']+="mpt3sas"
     fi
   fi
-  if true; then
-    [ "${CMDLINE['modprobe.blacklist']}" != "" ] && CMDLINE['modprobe.blacklist']+=","
-    CMDLINE['modprobe.blacklist']+="evbug"
-  fi
+  # CMDLINE['kvm.ignore_msrs']="1"
+  # CMDLINE['kvm.report_ignored_msrs']="0"
   if echo "apollolake geminilake" | grep -wq "${PLATFORM}"; then
     CMDLINE["intel_iommu"]="igfx_off"
   fi
@@ -215,7 +201,6 @@ function bootDSM () {
     grub-editenv ${USER_GRUBENVFILE} set next_entry="direct"
     echo -e "\033[1;34mReboot with Directboot\033[0m"
     exec reboot
-    exit 0
   elif [ "${DIRECTBOOT}" == "false" ]; then
     grub-editenv ${USER_GRUBENVFILE} unset dsm_cmdline
     grub-editenv ${USER_GRUBENVFILE} unset next_entry
@@ -299,19 +284,32 @@ function bootDSM () {
       KEXECARGS="--noefi"
     fi
     kexec ${KEXECARGS} -l "${MOD_ZIMAGE_FILE}" --initrd "${MOD_RDGZ_FILE}" --command-line="${CMDLINE_LINE}" >"${LOG_FILE}" 2>&1 || dieLog
-    echo -e "\033[1;37mBooting DSM...\033[0m"
+
     for T in $(busybox w 2>/dev/null | grep -v 'TTY' | awk '{print $2}'); do
       if [ -n "${IPCON}" ]; then
         [ -w "/dev/${T}" ] && echo -e "\n\033[1;37mThis interface will not be operational. Wait a few minutes.\033[0m\nUse \033[1;34mhttp://${IPCON}:5000\033[0m or try \033[1;34mhttp://find.synology.com/ \033[0mto find DSM and proceed.\n" >"/dev/${T}" 2>/dev/null || true
       else
-        [ -w "/dev/${T}" ] && echo -e "\n\033[1;37mThis interface will not be operational. Wait a few minutes.\033[0m\nUse \033[1;34mhttp://find.synology.com/ \033[0mto find DSM and proceed.\n" >"/dev/${T}" 2>/dev/null || true
+        [ -w "/dev/${T}" ] && echo -e "\n\033[1;37mThis interface will not be operational. Wait a few minutes.\nNo IP found. \033[0m\nTry \033[1;34mhttp://find.synology.com/ \033[0mto find DSM and proceed.\n" >"/dev/${T}" 2>/dev/null || true
       fi
     done
+
     # Clear logs for dbgutils addons
     rm -rf "${PART1_PATH}/logs" >/dev/null 2>&1 || true
 
     KERNELLOAD="$(readConfigKey "kernelload" "${USER_CONFIG_FILE}")"
+    if [ "${KERNELLOAD}" == "kexec" ]; then
+      # Unload all network interfaces
+      for D in $(readlink /sys/class/net/*/device/driver); do rmmod -f "$(basename ${D})" 2>/dev/null || true; done
+
+      # Unload all graphics drivers
+      # for D in $(readlink /sys/class/drm/*/device/driver); do rmmod -f "$(basename ${D})" 2>/dev/null || true; done
+      for D in $(lsmod | grep -E '^(nouveau|amdgpu|radeon|i915)' | awk '{print $1}'); do rmmod -f "${D}" 2>/dev/null || true; done
+      for I in $(find /sys/devices -name uevent -exec bash -c 'cat {} 2>/dev/null | grep -Eq "PCI_CLASS=0?30[0|1|2]00" && dirname {}' \;); do
+        [ -e ${I}/reset ] && cat ${I}/vendor >/dev/null | grep -iq 0x10de && echo 1 >${I}/reset || true # Proc open nvidia driver when booting
+      done
+    fi
+    echo -e "\033[1;37mBooting DSM...\033[0m"
+    # Boot to DSM
     [ "${KERNELLOAD}" == "kexec" ] && kexec -a -e || poweroff
-    exit 0
   fi
 }

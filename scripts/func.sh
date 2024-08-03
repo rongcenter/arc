@@ -176,6 +176,29 @@ function getPatches() {
   echo "Getting Patches end - ${TAG}"
 }
 
+# Get latest Custom
+# $1 path
+function getCustom() {
+  echo "Getting Custom begin"
+  local DEST_PATH="${1:-custom}"
+  local CACHE_FILE="/tmp/custom.zip"
+  rm -f "${CACHE_FILE}"
+  if [ -n "${CUSTOMTAG}" ]; then
+    TAG="${CUSTOMTAG}"
+  else
+    TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-custom/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+  fi
+  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-custom/releases/download/${TAG}/custom.zip" -o "${CACHE_FILE}")
+  echo "TAG=${TAG}; Status=${STATUS}"
+  [ ${STATUS} -ne 200 ] && exit 1
+  # Unzip Custom
+  rm -rf "${DEST_PATH}"
+  mkdir -p "${DEST_PATH}"
+  unzip "${CACHE_FILE}" -d "${DEST_PATH}"
+  rm -f "${CACHE_FILE}"
+  echo "Getting Custom end - ${TAG}"
+}
+
 # Get latest Theme
 # $1 path
 function getTheme() {
@@ -198,29 +221,54 @@ function getTheme() {
   echo "Getting Theme end - ${TAG}"
 }
 
-# Get latest Buildroot
+# Get latest Buildroot-X
 # $1 TAG
 # $2 path
-function getBuildroot() {
-  echo "Getting Buildroot begin"
+function getBuildrootx() {
+  echo "Getting Buildroot-X begin"
   TAG="${1:-latest}"
-  local DEST_PATH="${2:-br}"
+  local DEST_PATH="${2:-brx}"
 
   if [ "${TAG}" = "latest" ]; then
-    TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-buildroot/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+    TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-buildroot-x/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
   fi
   [ ! -d "${DEST_PATH}" ] && mkdir -p "${DEST_PATH}"
   rm -f "${DEST_PATH}/bzImage-arc"
-  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-buildroot/releases/download/${TAG}/bzImage" -o "${DEST_PATH}/bzImage-arc")
+  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-buildroot-x/releases/download/${TAG}/bzImage" -o "${DEST_PATH}/bzImage-arc")
   echo "TAG=${TAG}; Status=${STATUS}"
   [ ${STATUS} -ne 200 ] && exit 1
 
   rm -f "${DEST_PATH}/initrd-arc"
-  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-buildroot/releases/download/${TAG}/rootfs.cpio.xz" -o "${DEST_PATH}/initrd-arc")
+  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-buildroot-x/releases/download/${TAG}/rootfs.cpio.xz" -o "${DEST_PATH}/initrd-arc")
   echo "TAG=${TAG}; Status=${STATUS}"
   [ ${STATUS} -ne 200 ] && exit 1
 
-  echo "Getting Buildroot end - ${TAG}"
+  echo "Getting Buildroot-X end - ${TAG}"
+}
+
+# Get latest Buildroot-S
+# $1 TAG
+# $2 path
+function getBuildroots() {
+  echo "Getting Buildroot-S begin"
+  TAG="${1:-latest}"
+  local DEST_PATH="${2:-brs}"
+
+  if [ "${TAG}" = "latest" ]; then
+    TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-buildroot-s/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+  fi
+  [ ! -d "${DEST_PATH}" ] && mkdir -p "${DEST_PATH}"
+  rm -f "${DEST_PATH}/bzImage-arc"
+  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-buildroot-s/releases/download/${TAG}/bzImage" -o "${DEST_PATH}/bzImage-arc")
+  echo "TAG=${TAG}; Status=${STATUS}"
+  [ ${STATUS} -ne 200 ] && exit 1
+
+  rm -f "${DEST_PATH}/initrd-arc"
+  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-buildroot-s/releases/download/${TAG}/rootfs.cpio.xz" -o "${DEST_PATH}/initrd-arc")
+  echo "TAG=${TAG}; Status=${STATUS}"
+  [ ${STATUS} -ne 200 ] && exit 1
+
+  echo "Getting Buildroot-S end - ${TAG}"
 }
 
 # Get latest Offline

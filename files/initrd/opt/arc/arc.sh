@@ -37,6 +37,7 @@ fi
 # Get Arc Data from Config
 ARC_KEY="$(readConfigKey "arc.key" "${USER_CONFIG_FILE}")"
 ARCPATCH="$(readConfigKey "arc.patch" "${USER_CONFIG_FILE}")"
+ARCDYN="$(readConfigKey "arc.dynamic" "${USER_CONFIG_FILE}")"
 BOOTIPWAIT="$(readConfigKey "bootipwait" "${USER_CONFIG_FILE}")"
 DIRECTBOOT="$(readConfigKey "directboot" "${USER_CONFIG_FILE}")"
 EMMCBOOT="$(readConfigKey "emmcboot" "${USER_CONFIG_FILE}")"
@@ -57,11 +58,15 @@ RAIDCONTROLLER="$(readConfigKey "device.raidcontroller" "${USER_CONFIG_FILE}")"
 SASCONTROLLER="$(readConfigKey "device.sascontroller" "${USER_CONFIG_FILE}")"
 
 # Get Config/Build Status
+ARCBRANCH="$(readConfigKey "arc.branch" "${USER_CONFIG_FILE}")"
 CONFDONE="$(readConfigKey "arc.confdone" "${USER_CONFIG_FILE}")"
 BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
 
 # Get Keymap and Timezone Config
 ntpCheck
+
+# Check for Dynamic Mode
+dynCheck
 
 ###############################################################################
 # Mounts backtitle dynamically
@@ -247,6 +252,8 @@ function arcModel() {
       rm -f "${PART1_PATH}/grub_cksum.syno" "${PART1_PATH}/GRUB_VER" "${PART2_PATH}/"* >/dev/null 2>&1 || true
     fi
   fi
+  # Reset Cmdline
+  writeConfigKey "cmdline" "{}" "${USER_CONFIG_FILE}"
   ARCPATCH="$(readConfigKey "arc.patch" "${USER_CONFIG_FILE}")"
   BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
   CONFDONE="$(readConfigKey "arc.confdone" "${USER_CONFIG_FILE}")"
@@ -865,6 +872,7 @@ function boot() {
     --infobox "Booting DSM...\nPlease stay patient!" 4 25
   sleep 2
   bootDSM
+  exit 0
 }
 
 ###############################################################################
@@ -883,14 +891,14 @@ else
   while true; do
     echo "= \"\Z4========== Main ==========\Zn \" "                                            >"${TMP_PATH}/menu"
     if [ -z "${ARC_KEY}" ]; then
-      echo "0 \"Decrypt Arc Patch \" "                                                      >>"${TMP_PATH}/menu"
+      echo "0 \"Decrypt Arc Patch \" "                                                        >>"${TMP_PATH}/menu"
     fi
-    echo "1 \"Choose Model \" "                                                             >>"${TMP_PATH}/menu"
+    echo "1 \"Choose Model \" "                                                               >>"${TMP_PATH}/menu"
     if [ "${CONFDONE}" == "true" ]; then
-      echo "2 \"Build Loader \" "                                                           >>"${TMP_PATH}/menu"
+      echo "2 \"Build Loader \" "                                                             >>"${TMP_PATH}/menu"
     fi
     if [ "${BUILDDONE}" == "true" ]; then
-      echo "3 \"Boot Loader \" "                                                            >>"${TMP_PATH}/menu"
+      echo "3 \"Boot Loader \" "                                                              >>"${TMP_PATH}/menu"
     fi
     echo "= \"\Z4========== Info ==========\Zn \" "                                           >>"${TMP_PATH}/menu"
     echo "a \"Sysinfo \" "                                                                    >>"${TMP_PATH}/menu"
@@ -970,17 +978,19 @@ else
     fi
     if [ "${LOADEROPTS}" == "true" ]; then
       echo "= \"\Z4========= Loader =========\Zn \" "                                         >>"${TMP_PATH}/menu"
-      echo "= \"\Z4=== Edit with caution! ===\Zn \" "                                         >>"${TMP_PATH}/menu"
+      echo "= \"\Z1=== Edit with caution! ===\Zn \" "                                         >>"${TMP_PATH}/menu"
       echo "W \"RD Compression: \Z4${RD_COMPRESSED}\Zn \" "                                   >>"${TMP_PATH}/menu"
       echo "X \"Sata DOM: \Z4${SATADOM}\Zn \" "                                               >>"${TMP_PATH}/menu"
       echo "u \"Switch LKM Version: \Z4${LKM}\Zn \" "                                         >>"${TMP_PATH}/menu"
-      echo "c \"Switch IPv6 Support: \Z4${IPV6}\Zn \" "                                       >>"${TMP_PATH}/menu"
       echo "B \"Grep DSM Config from Backup \" "                                              >>"${TMP_PATH}/menu"
       echo "L \"Grep Logs from dbgutils \" "                                                  >>"${TMP_PATH}/menu"
       echo "w \"Reset Loader to Defaults \" "                                                 >>"${TMP_PATH}/menu"
       echo "C \"Clone Loader to Disk \" "                                                     >>"${TMP_PATH}/menu"
       echo "v \"Write Loader Modifications to Disk \" "                                       >>"${TMP_PATH}/menu"
       echo "n \"Grub Bootloader Config \" "                                                   >>"${TMP_PATH}/menu"
+      if [ "${OFFLINE}" == "false" ]; then
+        echo "Y \"Arc Dev Mode: \Z4${ARCDYN}\Zn \" "                                          >>"${TMP_PATH}/menu"
+      fi
       echo "F \"\Z1Formate Disks \Zn \" "                                                     >>"${TMP_PATH}/menu"
       if [ "${OFFLINE}" == "false" ]; then
         echo "G \"Install opkg Package Manager \" "                                           >>"${TMP_PATH}/menu"
@@ -992,7 +1002,7 @@ else
     echo "9 \"Offline Mode: \Z4${OFFLINE}\Zn \" "                                             >>"${TMP_PATH}/menu"
     echo "y \"Choose a Keymap \" "                                                            >>"${TMP_PATH}/menu"
     if [ "${OFFLINE}" == "false" ]; then
-      echo "z \"Update Loader \" "                                                            >>"${TMP_PATH}/menu"
+      echo "z \"Update Menu \" "                                                              >>"${TMP_PATH}/menu"
     fi
     echo "I \"Power Menu \" "                                                                 >>"${TMP_PATH}/menu"
     echo "V \"Credits \" "                                                                    >>"${TMP_PATH}/menu"
@@ -1126,28 +1136,6 @@ else
         LOADEROPTS="${LOADEROPTS}"
         NEXT="8"
         ;;
-      c) [ "${IPV6}" == "true" ] && IPV6='false' || IPV6='true'
-        if [ "${IPV6}" == "true" ]; then
-          writeConfigKey "arc.ipv6" "true" "${USER_CONFIG_FILE}"
-          if cat "${USER_GRUB_CONFIG}" | grep -q 'ipv6.disable=1'; then
-            sed -i 's/ipv6.disable=1/ipv6.disable=0/g' "${USER_GRUB_CONFIG}"
-            dialog --backtitle "$(backtitle)" --title "Arc Boot" \
-              --infobox "Rebooting with IPv6 Support!" 4 30
-            sleep 3
-            rebootTo config
-          fi
-        elif [ "${IPV6}" == "false" ]; then
-          writeConfigKey "arc.ipv6" "false" "${USER_CONFIG_FILE}"
-          if cat "${USER_GRUB_CONFIG}" | grep -q 'ipv6.disable=0'; then
-            sed -i 's/ipv6.disable=0/ipv6.disable=1/g' "${GRUB_CONFIG_FILE}"
-            dialog --backtitle "$(backtitle)" --title "Arc Boot" \
-              --infobox "Rebooting without IPv6 Support!" 4 30
-            sleep 3
-            rebootTo config
-          fi
-        fi
-        NEXT="c"
-        ;;
       l) editUserConfig; NEXT="l" ;;
       w) resetLoader; NEXT="w" ;;
       v) saveMenu; NEXT="v" ;;
@@ -1156,6 +1144,12 @@ else
       L) greplogs; NEXT="L" ;;
       T) forcessh; NEXT="T" ;;
       C) cloneLoader; NEXT="C" ;;
+      Y) [ "${ARCDYN}" == "false" ] && ARCDYN='true' || ARCDYN='false'
+        writeConfigKey "arc.dynamic" "${ARCDYN}" "${USER_CONFIG_FILE}"
+        rm -f "${TMP_PATH}/dynamic" >/dev/null 2>&1 || true
+        dynCheck
+        NEXT="Y"
+        ;;
       F) formatDisks; NEXT="F" ;;
       G) package; NEXT="G" ;;
       # Misc Settings

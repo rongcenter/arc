@@ -5,6 +5,19 @@
 . ${ARC_PATH}/include/addons.sh
 
 ###############################################################################
+# Check loader disk
+function checkBootLoader() {
+  [ ! -w "${PART1_PATH}" ] && return 1
+  [ ! -w "${PART2_PATH}" ] && return 1
+  [ ! -w "${PART3_PATH}" ] && return 1
+  command -v awk >/dev/null 2>&1 || return 1
+  command -v cut >/dev/null 2>&1 || return 1
+  command -v sed >/dev/null 2>&1 || return 1
+  command -v tar >/dev/null 2>&1 || return 1
+  return 0
+}
+
+###############################################################################
 # Just show error message and dies
 function die() {
   echo -e "\033[1;41m$@\033[0m"
@@ -267,12 +280,19 @@ function getBus() {
 # 1 - ethN
 function getIP() {
   IP=""
-  if [ -n "${1}" ] && [ -d "/sys/class/net/${1}" ]; then
-    IP=$(ip route show dev ${1} 2>/dev/null | sed -n 's/.* via .* src \(.*\)  metric .*/\1/p')
-    [ -z "${IP}" ] && IP=$(ip addr show ${1} scope global 2>/dev/null | grep -E "inet .* eth" | awk '{print $2}' | cut -f1 -d'/' | head -1)
+  MACR="$(cat /sys/class/net/${1}/address 2>/dev/null | sed 's/://g' | tr '[:upper:]' '[:lower:]')"
+  IPR="$(readConfigKey "network.${MACR}" "${USER_CONFIG_FILE}")"
+  if [ -n "${IPR}" ]; then
+    IFS='/' read -r -a IPRA <<<"${IPR}"
+    IP=${IPRA[0]}
   else
-    IP=$(ip route show 2>/dev/null | sed -n 's/.* via .* src \(.*\)  metric .*/\1/p' | head -1)
-    [ -z "${IP}" ] && IP=$(ip addr show scope global 2>/dev/null | grep -E "inet .* eth" | awk '{print $2}' | cut -f1 -d'/' | head -1)
+    if [ -n "${1}" ] && [ -d "/sys/class/net/${1}" ]; then
+      IP=$(ip route show dev ${1} 2>/dev/null | sed -n 's/.* via .* src \(.*\)  metric .*/\1/p')
+      [ -z "${IP}" ] && IP=$(ip addr show ${1} scope global 2>/dev/null | grep -E "inet .* eth" | awk '{print $2}' | cut -f1 -d'/' | head -1)
+    else
+      IP=$(ip route show 2>/dev/null | sed -n 's/.* via .* src \(.*\)  metric .*/\1/p' | head -1)
+      [ -z "${IP}" ] && IP=$(ip addr show scope global 2>/dev/null | grep -E "inet .* eth" | awk '{print $2}' | cut -f1 -d'/' | head -1)
+    fi
   fi
   echo "${IP}"
   return 0
@@ -622,4 +642,25 @@ function systemCheck () {
   fi
   # Screen Timeout
   checkCmdline "arc_cmdline" "nomodeset" && SCREENOFF="false" || SCREENOFF="true"
+}
+
+###############################################################################
+# Check Dynamic Mode
+function dynCheck () {
+  ARCDYN="$(readConfigKey "arc.dynamic" "${USER_CONFIG_FILE}")"
+  OFFLINE="$(readConfigKey "arc.offline" "${USER_CONFIG_FILE}")"
+  if [ "${ARCDYN}" == "true" ] && [ "${OFFLINE}" == "false" ] && [ ! -f "${TMP_PATH}/dynamic" ]; then
+    curl -skL "https://github.com/AuxXxilium/arc/archive/refs/heads/dev.zip" -o "${TMP_PATH}/dev.zip"
+    unzip -qq -o "${TMP_PATH}/dev.zip" -d "${TMP_PATH}" 2>/dev/null
+    cp -rf "${TMP_PATH}/arc-dev/files/initrd/opt/arc/"* "${ARC_PATH}"
+    rm -rf "${TMP_PATH}/arc-dev"
+    rm -f "${TMP_PATH}/dev.zip"
+    VERSION="Dynamic-Dev"
+    sed 's/^ARC_VERSION=.*/ARC_VERSION="'${VERSION}'"/' -i ${ARC_PATH}/include/consts.sh
+    echo "true" >"${TMP_PATH}/dynamic"
+    clear
+    exec init.sh
+  elif [ "${ARCDYN}" == "false" ] || [ "${OFFLINE}" == "true" ]; then
+    [ -f "${TMP_PATH}/dynamic" ] && rm -f "${TMP_PATH}/dynamic" >/dev/null 2>&1 || true
+  fi
 }

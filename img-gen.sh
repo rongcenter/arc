@@ -13,10 +13,12 @@ getAddons "files/p3/addons"
 getModules "files/p3/modules"
 getConfigs "files/p3/configs"
 getPatches "files/p3/patches"
+getCustom "files/p3/custom"
 getTheme "files/p1/boot/grub"
 getOffline "files/p3/configs"
-getBuildroot "latest" "br"
+getBuildrootx "latest" "brx"
 
+# Xbase
 IMAGE_FILE="arc.img"
 gzip -dc "files/initrd/opt/arc/grub.img.gz" >"${IMAGE_FILE}"
 fdisk -l "${IMAGE_FILE}"
@@ -32,18 +34,16 @@ mkdir -p "/tmp/p3"
 sudo mount ${LOOPX}p1 "/tmp/p1"
 sudo mount ${LOOPX}p3 "/tmp/p3"
 
-[[ ! -f "br/bzImage-arc" || ! -f "br/initrd-arc" ]] && return 1
+[[ ! -f "brx/bzImage-arc" || ! -f "brx/initrd-arc" ]] && return 1
 
 VERSION=$(date +'%y.%-m.dev')
 echo "${VERSION}" >files/p1/ARC-VERSION
 echo "${VERSION}" >VERSION
 sed 's/^ARC_VERSION=.*/ARC_VERSION="'${VERSION}'"/' -i files/initrd/opt/arc/include/consts.sh
 
-# read -rp "Build: ${VERSION}? Press ENTER to continue"
-
 echo "Repack initrd"
-cp -f "br/bzImage-arc" "files/p3/bzImage-arc"
-repackInitrd "br/initrd-arc" "files/initrd" "files/p3/initrd-arc"
+cp -f "brx/bzImage-arc" "files/p3/bzImage-arc"
+repackInitrd "brx/initrd-arc" "files/initrd" "files/p3/initrd-arc"
 
 echo "Copying files"
 sudo cp -Rf "files/p1/"* "/tmp/p1"
@@ -58,9 +58,6 @@ rmdir "/tmp/p3"
 
 sudo losetup --detach ${LOOPX}
 
-#resizeImg "arc.img" "+1024M" "arc-2G.img"
-#mv -f "arc-2G.img" "arc.img"
-
-qemu-img convert arc.img -O vmdk -o adapter_type=lsilogic,compat6 arc-dyn.vmdk
-qemu-img convert arc.img -O vmdk -o adapter_type=lsilogic,subformat=monolithicFlat,compat6 arc.vmdk
-qemu-img convert arc.img -O vhdx -o subformat=dynamic arc.vhdx
+qemu-img convert ${IMAGE_FILE} -O vmdk -o adapter_type=lsilogic arc-dyn.vmdk
+qemu-img convert ${IMAGE_FILE} -O vmdk -o adapter_type=lsilogic,subformat=monolithicFlat arc.vmdk
+qemu-img convert ${IMAGE_FILE} -O vhdx -o subformat=dynamic arc.vhdx
