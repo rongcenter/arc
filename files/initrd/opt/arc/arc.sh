@@ -66,22 +66,17 @@ BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
 ntpCheck
 
 # Check for Dynamic Mode
-if [ "${ARCDYN}" == "true" ]; then
-  curl -skL "https://github.com/AuxXxilium/arc/archive/refs/heads/main.zip" -o "${TMP_PATH}/main.zip"
-  unzip -o "${TMP_PATH}/main.zip" -d "${TMP_PATH}/arcdyn" 2>/dev/null
-  cp -rf "${TMP_PATH}/arcdyn/files/initrd/opt/arc" "${ARC_PATH}"
-  rm -rf "${TMP_PATH}/arcdyn"
-  init.sh
-fi
+dynCheck
 
 ###############################################################################
 # Mounts backtitle dynamically
 function backtitle() {
   if [ "${ARCDYN}" == "true" ]; then
-    ARC_TITLE="${ARC_TITLE}D"
-  fi
-  if [ -n "${NEWTAG}" ] && [ "${NEWTAG}" != "${ARC_VERSION}" ]; then
-    ARC_TITLE="${ARC_TITLE} > ${NEWTAG}"
+    ARC_TITLE="Dynamic"
+  else
+    if [ -n "${NEWTAG}" ] && [ "${NEWTAG}" != "${ARC_VERSION}" ]; then
+      ARC_TITLE="${ARC_TITLE} > ${NEWTAG}"
+    fi
   fi
   if [ -z "${MODEL}" ]; then
     MODEL="(Model)"
@@ -987,7 +982,7 @@ else
     fi
     if [ "${LOADEROPTS}" == "true" ]; then
       echo "= \"\Z4========= Loader =========\Zn \" "                                         >>"${TMP_PATH}/menu"
-      echo "= \"\Z4=== Edit with caution! ===\Zn \" "                                         >>"${TMP_PATH}/menu"
+      echo "= \"\Z1=== Edit with caution! ===\Zn \" "                                         >>"${TMP_PATH}/menu"
       echo "W \"RD Compression: \Z4${RD_COMPRESSED}\Zn \" "                                   >>"${TMP_PATH}/menu"
       echo "X \"Sata DOM: \Z4${SATADOM}\Zn \" "                                               >>"${TMP_PATH}/menu"
       echo "u \"Switch LKM Version: \Z4${LKM}\Zn \" "                                         >>"${TMP_PATH}/menu"
@@ -1155,13 +1150,7 @@ else
       C) cloneLoader; NEXT="C" ;;
       Y) [ "${ARCDYN}" == "false" ] && ARCDYN='true' || ARCDYN='false'
         writeConfigKey "arc.dynamic" "${ARCDYN}" "${USER_CONFIG_FILE}"
-        if [ "${ARCDYN}" == "true" ]; then
-          curl -skL "https://github.com/AuxXxilium/arc/archive/refs/heads/main.zip" -o "${TMP_PATH}/main.zip"
-          unzip -o "${TMP_PATH}/main.zip" -d "${TMP_PATH}/arcdyn" 2>/dev/null
-          cp -rf "${TMP_PATH}/arcdyn/files/initrd/opt/arc" "${ARC_PATH}"
-          rm -rf "${TMP_PATH}/arcdyn"
-          init.sh
-        fi
+        dynCheck
         NEXT="Y"
         ;;
       F) formatDisks; NEXT="F" ;;

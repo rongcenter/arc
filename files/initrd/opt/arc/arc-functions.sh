@@ -844,9 +844,11 @@ function updateMenu() {
       2)
         # Ask for Tag
         TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${PART1_PATH}/ARC-VERSION)"
         dialog --clear --backtitle "$(backtitle)" --title "Upgrade Loader" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
         [ $? -ne 0 ] && continue
@@ -869,9 +871,11 @@ function updateMenu() {
       3)
         # Ask for Tag
         TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${PART1_PATH}/ARC-VERSION)"
         dialog --clear --backtitle "$(backtitle)" --title "Update Loader" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
         [ $? -ne 0 ] && continue
@@ -893,9 +897,11 @@ function updateMenu() {
       4)
         # Ask for Tag
         TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc-addons/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${ADDONS_PATH}/VERSION)"
         dialog --clear --backtitle "$(backtitle)" --title "Update Addons" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
         [ $? -ne 0 ] && continue
@@ -917,9 +923,11 @@ function updateMenu() {
       5)
         # Ask for Tag
         TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc-configs/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${MODEL_CONFIG_PATH}/VERSION)"
         dialog --clear --backtitle "$(backtitle)" --title "Update Configs" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
         opts=$(cat ${TMP_PATH}/opts)
@@ -942,9 +950,11 @@ function updateMenu() {
       6)
         # Ask for Tag
         TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc-lkm/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${LKMS_PATH}/VERSION)"
         dialog --clear --backtitle "$(backtitle)" --title "Update LKMs" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
         opts=$(cat ${TMP_PATH}/opts)
@@ -965,9 +975,11 @@ function updateMenu() {
       7)
         # Ask for Tag
         TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc-modules/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${MODULES_PATH}/VERSION)"
         dialog --clear --backtitle "$(backtitle)" --title "Update Modules" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
         opts=$(cat ${TMP_PATH}/opts)
@@ -988,10 +1000,13 @@ function updateMenu() {
       8)
         # Ask for Tag
         TAG=""
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc-patches/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${PATCH_PATH}/VERSION)"
         dialog --clear --backtitle "$(backtitle)" --title "Update Patches" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
+        2>"${TMP_PATH}/opts"
         2>"${TMP_PATH}/opts"
         opts=$(cat ${TMP_PATH}/opts)
         [ -z "${opts}" ] && return 1
@@ -1011,9 +1026,11 @@ function updateMenu() {
       9)
         # Ask for Tag
         TAG=""
-        dialog --clear --backtitle "$(backtitle)" --title "Update Custom Kernel" \
-          --menu "Which Version?" 0 0 0 \
-          1 "Latest" \
+        NEWVER="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc-custom/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+        OLDVER="$(cat ${CUSTOM_PATH}/VERSION)"
+        dialog --clear --backtitle "$(backtitle)" --title "Update Custom" \
+          --menu "Current: ${OLDVER} -> Which Version?" 7 50 0 \
+          1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
         opts=$(cat ${TMP_PATH}/opts)
@@ -1033,10 +1050,10 @@ function updateMenu() {
         ;;
       0)
         # Ask for Arc Branch
-        dialog --clear --backtitle "$(backtitle)" --title "Switch Buildroot" \
-          --menu "Which Branch?" 0 0 0 \
-          1 "x - latest" \
-          2 "s - stable" \
+        dialog --clear --backtitle "$(backtitle)" --title "Switch Buildsystem" \
+          --menu "Which Branch?" 7 50 0 \
+          1 "x - latest Buildsystem" \
+          2 "s - stable Buildsystem" \
         2>"${TMP_PATH}/opts"
         opts=$(cat ${TMP_PATH}/opts)
         [ -z "${opts}" ] && return 1
@@ -1046,7 +1063,7 @@ function updateMenu() {
           writeConfigKey "arc.branch" "s" "${USER_CONFIG_FILE}"
         fi
         ARCBRANCH="$(readConfigKey "arc.branch" "${USER_CONFIG_FILE}")"
-        dialog --backtitle "$(backtitle)" --title "Switch Buildroot" --aspect 18 \
+        dialog --backtitle "$(backtitle)" --title "Switch Buildsystem" --aspect 18 \
           --msgbox "Updates are using ${ARCBRANCH} Branch.\nYou need to Update the Loader now!" 0 0
         writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
         BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
@@ -2069,17 +2086,17 @@ function rebootMenu() {
   rm -f "${TMP_PATH}/opts" >/dev/null
   touch "${TMP_PATH}/opts"
   # Selectable Reboot Options
-  echo -e "config \"Config Mode\"" >>"${TMP_PATH}/opts"
-  echo -e "update \"Automated Update Mode\"" >>"${TMP_PATH}/opts"
-  echo -e "recovery \"Recovery Mode\"" >>"${TMP_PATH}/opts"
-  echo -e "junior \"Reinstall Mode\"" >>"${TMP_PATH}/opts"
+  echo -e "config \"Arc - Config Mode\"" >>"${TMP_PATH}/opts"
+  echo -e "update \"Arc - Automated Update Mode\"" >>"${TMP_PATH}/opts"
+  echo -e "init \"Arc - Restart Loader Init\"" >>"${TMP_PATH}/opts"
+  echo -e "network \"Arc - Restart Network Service\"" >>"${TMP_PATH}/opts"
+  echo -e "recovery \"DSM - Recovery Mode\"" >>"${TMP_PATH}/opts"
+  echo -e "junior \"DSM - Reinstall Mode\"" >>"${TMP_PATH}/opts"
   if efibootmgr | grep -q "^Boot0000"; then
-    echo -e "bios \"BIOS/UEFI\"" >>"${TMP_PATH}/opts"
+    echo -e "bios \"System - BIOS/UEFI\"" >>"${TMP_PATH}/opts"
   fi
-  echo -e "poweroff \"Shutdown\"" >>"${TMP_PATH}/opts"
+  echo -e "poweroff \"System - Shutdown\"" >>"${TMP_PATH}/opts"
   echo -e "shell \"Exit to Shell Cmdline\"" >>"${TMP_PATH}/opts"
-  echo -e "init \"Restart Loader Init\"" >>"${TMP_PATH}/opts"
-  echo -e "network \"Restart Network Service\"" >>"${TMP_PATH}/opts"
   dialog --backtitle "$(backtitle)" --title "Power Menu" \
     --menu  "Choose a Destination" 0 0 0 --file "${TMP_PATH}/opts" \
     2>${TMP_PATH}/resp

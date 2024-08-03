@@ -643,3 +643,21 @@ function systemCheck () {
   # Screen Timeout
   checkCmdline "arc_cmdline" "nomodeset" && SCREENOFF="false" || SCREENOFF="true"
 }
+
+###############################################################################
+# Check Dynamic Mode
+function dynCheck () {
+  ARCDYN="$(readConfigKey "arc.dynamic" "${USER_CONFIG_FILE}")"
+  OFFLINE="$(readConfigKey "arc.offline" "${USER_CONFIG_FILE}")"
+  if [ "${ARCDYN}" == "true" ] && [ "${OFFLINE}" == "false" ] && [ ! -f "${TMP_PATH}/dynamic" ]; then
+    curl -skL "https://github.com/AuxXxilium/arc/archive/refs/heads/dev.zip" -o "${TMP_PATH}/dev.zip"
+    unzip -qq -o "${TMP_PATH}/dev.zip" -d "${TMP_PATH}" 2>/dev/null
+    cp -rf "${TMP_PATH}/arc-dev/files/initrd/opt" "${ARC_PATH}"
+    rm -rf "${TMP_PATH}/arc-dev"
+    rm -f "${TMP_PATH}/dev.zip"
+    echo "true" >"${TMP_PATH}/dynamic"
+    init.sh
+  elif [ "${ARCDYN}" == "false" ] || [ "${OFFLINE}" == "true" ]; then
+    [ -f "${TMP_PATH}/dynamic" ] && rm -f "${TMP_PATH}/dynamic" >/dev/null 2>&1 || true
+  fi
+}
