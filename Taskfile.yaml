@@ -8,10 +8,15 @@ tasks:
       - git pull
       - ./img-gen.sh
 
-  build-img-s:
+  build-img-next:
     cmds:
       - git pull
-      - ./img-gen-s.sh
+      - ./img-gen-next.sh
+
+  build-img-all:
+    cmds:
+      - git pull
+      - ./img-gen-all.sh
 
   compile-kpatch:
     dir: kpatch

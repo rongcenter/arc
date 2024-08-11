@@ -65,6 +65,8 @@ BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
 # Get Keymap and Timezone Config
 ntpCheck
 
+KEYMAP="$(readConfigKey "keymap" "${USER_CONFIG_FILE}")"
+
 # Check for Dynamic Mode
 dynCheck
 
@@ -461,9 +463,9 @@ function arcSettings() {
     # Select Addons
     dialog --backtitle "$(backtitle)" --colors --title "DSM Addons" \
       --infobox "Loading Addons Table..." 3 40
-    writeConfigKey "addons.acpid" "" "${USER_CONFIG_FILE}"
-    writeConfigKey "addons.cpuinfo" "" "${USER_CONFIG_FILE}"
-    writeConfigKey "addons.storagepanel" "" "${USER_CONFIG_FILE}"
+    initConfigKey "addons.acpid" "" "${USER_CONFIG_FILE}"
+    initConfigKey "addons.cpuinfo" "" "${USER_CONFIG_FILE}"
+    initConfigKey "addons.storagepanel" "" "${USER_CONFIG_FILE}"
     addonSelection
     # Check for DT and HBA/Raid Controller
     if [ "${PLATFORM}" != "epyc7002" ]; then
@@ -547,6 +549,13 @@ function arcSummary() {
     DISKMAP="$(readConfigKey "cmdline.DiskIdxMap" "${USER_CONFIG_FILE}")"
   elif [ "${REMAP}" == "remap" ]; then
     PORTREMAP="$(readConfigKey "cmdline.sata_remap" "${USER_CONFIG_FILE}")"
+  elif [ "${REMAP}" == "ahci" ]; then
+    AHCIPORTREMAP="$(readConfigKey "cmdline.ahci_remap" "${USER_CONFIG_FILE}")"
+  else
+    PORTMAP="$(readConfigKey "cmdline.SataPortMap" "${USER_CONFIG_FILE}")"
+    DISKMAP="$(readConfigKey "cmdline.DiskIdxMap" "${USER_CONFIG_FILE}")"
+    PORTREMAP="$(readConfigKey "cmdline.sata_remap" "${USER_CONFIG_FILE}")"
+    AHCIPORTREMAP="$(readConfigKey "cmdline.ahci_remap" "${USER_CONFIG_FILE}")"
   fi
   DIRECTBOOT="$(readConfigKey "directboot" "${USER_CONFIG_FILE}")"
   KERNELLOAD="$(readConfigKey "kernelload" "${USER_CONFIG_FILE}")"
@@ -559,6 +568,13 @@ function arcSummary() {
   EMMCBOOT="$(readConfigKey "emmcboot" "${USER_CONFIG_FILE}")"
   OFFLINE="$(readConfigKey "arc.offline" "${USER_CONFIG_FILE}")"
   KERNEL="$(readConfigKey "kernel" "${USER_CONFIG_FILE}")"
+  if [ "${DT}" == "false" ] && [ "${REMAP}" == "user" ]; then
+    if [ -z "${PORTMAP}" ] && [ -z "${DISKMAP}"] && [ -z "${PORTREMAP}" ] && [ -z "${AHCIPORTREMAP}" ]; then
+      dialog --backtitle "$(backtitle)" --title "Arc Error" \
+        --msgbox "ERROR: You selected Portmap: User and didn't set any values. -> Can't build Loader!\nGo need to go Cmdline Options and add your Values." 6 80
+      return 1
+    fi
+  fi
   # Print Summary
   SUMMARY="\Z4> DSM Information\Zn"
   SUMMARY+="\n>> DSM Model: \Zb${MODEL}\Zn"
@@ -573,6 +589,7 @@ function arcSummary() {
   [ -n "${PORTMAP}" ] && SUMMARY+="\n>> SataPortmap: \Zb${PORTMAP}\Zn"
   [ -n "${DISKMAP}" ] && SUMMARY+="\n>> DiskIdxMap: \Zb${DISKMAP}\Zn"
   [ -n "${PORTREMAP}" ] && SUMMARY+="\n>> SataRemap: \Zb${PORTREMAP}\Zn"
+  [ -n "${AHCIPORTREMAP}" ] && SUMMARY+="\n>> AhciRemap: \Zb${AHCIPORTREMAP}\Zn"
   [ "${DT}" == "true" ] && SUMMARY+="\n>> Sort Drives: \Zb${HDDSORT}\Zn"
   SUMMARY+="\n>> Offline Mode: \Zb${OFFLINE}\Zn"
   SUMMARY+="\n>> Directboot: \Zb${DIRECTBOOT}\Zn"

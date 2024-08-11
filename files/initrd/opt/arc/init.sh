@@ -66,7 +66,8 @@ initConfigKey "device.externalcontroller" "false" "${USER_CONFIG_FILE}"
 initConfigKey "keymap" "" "${USER_CONFIG_FILE}"
 initConfigKey "layout" "" "${USER_CONFIG_FILE}"
 initConfigKey "lkm" "prod" "${USER_CONFIG_FILE}"
-initConfigKey "modblacklist" "evbug,cdc_ether" "${USER_CONFIG_FILE}"
+# initConfigKey "modblacklist" "evbug,cdc_ether" "${USER_CONFIG_FILE}"
+initConfigKey "modblacklist" "evbug" "${USER_CONFIG_FILE}"
 initConfigKey "modules" "{}" "${USER_CONFIG_FILE}"
 initConfigKey "model" "" "${USER_CONFIG_FILE}"
 initConfigKey "modelid" "" "${USER_CONFIG_FILE}"
@@ -84,7 +85,7 @@ if grep -q "automated_arc" /proc/cmdline; then
 else
   writeConfigKey "automated" "false" "${USER_CONFIG_FILE}"
 fi
-[ $(echo "${ARC_VERSION}" | grep -q "s" | wc -l) -gt 0 ] && writeConfigKey "arc.branch" "s" "${USER_CONFIG_FILE}" || writeConfigKey "arc.branch" "" "${USER_CONFIG_FILE}"
+[ -f "${PART1_PATH}/ARC-BRANCH" ] && initConfigKey "arc.branch" "next" "${USER_CONFIG_FILE}" || initConfigKey "arc.branch" "" "${USER_CONFIG_FILE}"
 [ -f "${PART3_PATH}/automated" ] && rm -f "${PART3_PATH}/automated" >/dev/null 2>&1 || true
 # Check for compatibility
 compatboot
@@ -126,12 +127,12 @@ echo
 VID="0x46f4"
 PID="0x0001"
 
-BUSLIST="usb sata scsi nvme mmc xen"
+BUSLIST="usb sata sas scsi nvme mmc ide virtio vmbus xen"
 if [ "${BUS}" == "usb" ]; then
   VID="0x$(udevadm info --query property --name "${LOADER_DISK}" | grep ID_VENDOR_ID | cut -d= -f2)"
   PID="0x$(udevadm info --query property --name "${LOADER_DISK}" | grep ID_MODEL_ID | cut -d= -f2)"
 elif ! echo "${BUSLIST}" | grep -wq "${BUS}"; then
-  die "Loader Disk (${BUS}) is not USB or SATA/SCSI/NVME/eMMC"
+  die "$(printf "The boot disk does not support the current %s, only %s are supported." "${BUS}" "${BUSLIST// /\/}")"
 fi
 
 # Inform user and check bus
