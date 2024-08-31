@@ -1,7 +1,3 @@
-[[ -z "${ARC_PATH}" || ! -d "${ARC_PATH}/include" ]] && ARC_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/../" 2>/dev/null && pwd)"
-
-. ${ARC_PATH}/include/functions.sh
-
 ###############################################################################
 # Upgrade Loader
 function upgradeLoader () {
@@ -48,7 +44,7 @@ function upgradeLoader () {
     (
       # Download update file
       echo "Downloading ${TAG}"
-      if [ -n "${ARCBRANCH}" ]; then
+      if [ "${ARCBRANCH}" != "stable" ]; then
         local URL="https://github.com/AuxXxilium/arc/releases/download/${TAG}/arc-${TAG}-${ARCBRANCH}.img.zip"
       else
         local URL="https://github.com/AuxXxilium/arc/releases/download/${TAG}/arc-${TAG}.img.zip"
@@ -69,22 +65,26 @@ function upgradeLoader () {
       if [ -f "${TMP_PATH}/arc.img.zip" ]; then
         echo "Downloading Upgradefile successful!"
       else
-        echo "Error downloading Upgradefile!"
-        sleep 5
-        return 1
+        updateFailed
       fi
       unzip -oq "${TMP_PATH}/arc.img.zip" -d "${TMP_PATH}"
       rm -f "${TMP_PATH}/arc.img.zip" >/dev/null
       echo "Installing new Loader Image..."
       # Process complete update
       umount "${PART1_PATH}" "${PART2_PATH}" "${PART3_PATH}"
-      if [ -n "${ARCBRANCH}" ]; then
-        dd if="${TMP_PATH}/arc-${ARCBRANCH}.img" of=$(blkid | grep 'LABEL="ARC3"' | cut -d3 -f1) bs=1M conv=fsync
+      if [ "${ARCBRANCH}" != "stable" ]; then
+        if dd if="${TMP_PATH}/arc-${ARCBRANCH}.img" of=$(blkid | grep 'LABEL="ARC3"' | cut -d3 -f1) bs=1M conv=fsync; then
+          rm -f "${TMP_PATH}/arc-${ARCBRANCH}.img" >/dev/null
+        else
+          updateFailed
+        fi
       else
-        dd if="${TMP_PATH}/arc.img" of=$(blkid | grep 'LABEL="ARC3"' | cut -d3 -f1) bs=1M conv=fsync
+        if dd if="${TMP_PATH}/arc.img" of=$(blkid | grep 'LABEL="ARC3"' | cut -d3 -f1) bs=1M conv=fsync; then
+          rm -f "${TMP_PATH}/arc.img" >/dev/null
+        else
+          updateFailed
+        fi
       fi
-      # Ask for Boot
-      rm -f "${TMP_PATH}/arc.img" >/dev/null
       echo "Upgrade done! -> Rebooting..."
       sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Upgrade Loader" \
@@ -145,7 +145,7 @@ function updateLoader() {
     (
       # Download update file
       echo "Downloading ${TAG}"
-      if [ -n "${ARCBRANCH}" ]; then
+      if [ "${ARCBRANCH}" != "stable" ]; then
         local URL="https://github.com/AuxXxilium/arc/releases/download/${TAG}/update-${ARCBRANCH}.zip"
         local SHA="https://github.com/AuxXxilium/arc/releases/download/${TAG}/checksum-${ARCBRANCH}.sha256"
       else
@@ -176,13 +176,13 @@ function updateLoader() {
         mv -f "${TMP_PATH}/bzImage-arc" "${ARC_BZIMAGE_FILE}"
         mv -f "${TMP_PATH}/initrd-arc" "${ARC_RAMDISK_FILE}"
         rm -f "${TMP_PATH}/update.zip"
+        echo "Update done!"
+        sleep 2
       else
         echo "Error getting new Version!"
         sleep 5
         updateFailed
       fi
-      echo "Update done!"
-      sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Update Loader" \
       --progressbox "Updating Loader..." 20 70
   fi
@@ -247,13 +247,13 @@ function updateAddons() {
           tar -xaf "${F}" -C "${ADDONS_PATH}/${ADDON}"
           rm -f "${F}"
         done
+        echo "Update done!"
+        sleep 2
       else
         echo "Error extracting new Version!"
         sleep 5
         updateFailed
       fi
-      echo "Update done!"
-      sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Update Addons" \
       --progressbox "Updating Addons..." 20 70
   fi
@@ -310,13 +310,13 @@ function updatePatches() {
         echo "Installing new Patches..."
         unzip -oq "${TMP_PATH}/patches.zip" -d "${PATCH_PATH}"
         rm -f "${TMP_PATH}/patches.zip"
+        echo "Update done!"
+        sleep 2
       else
         echo "Error extracting new Version!"
         sleep 5
         updateFailed
       fi
-      echo "Update done!"
-      sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Update Patches" \
       --progressbox "Updating Patches..." 20 70
   fi
@@ -373,13 +373,13 @@ function updateCustom() {
         echo "Installing new Custom Kernel..."
         unzip -oq "${TMP_PATH}/custom.zip" -d "${CUSTOM_PATH}"
         rm -f "${TMP_PATH}/custom.zip"
+        echo "Update done!"
+        sleep 2
       else
         echo "Error extracting new Version!"
         sleep 5
         updateFailed
       fi
-      echo "Update done!"
-      sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Update Custom" \
       --progressbox "Updating Custom..." 20 70
   fi
@@ -442,11 +442,7 @@ function updateModules() {
           PLATFORM="$(readConfigKey "platform" "${USER_CONFIG_FILE}")"
           KVER="$(readConfigKey "platforms.${PLATFORM}.productvers.\"${PRODUCTVER}\".kver" "${P_FILE}")"
           # Modify KVER for Epyc7002
-          if [ "${PLATFORM}" = "epyc7002" ]; then
-            KVERP="${PRODUCTVER}-${KVER}"
-          else
-            KVERP="${KVER}"
-          fi
+          [ "${PLATFORM}" == "epyc7002" ] && KVERP="${PRODUCTVER}-${KVER}" || KVERP="${KVER}"
         fi
         if [ -n "${PLATFORM}" ] && [ -n "${KVERP}" ]; then
           writeConfigKey "modules" "{}" "${USER_CONFIG_FILE}"
@@ -455,13 +451,13 @@ function updateModules() {
             writeConfigKey "modules.${ID}" "" "${USER_CONFIG_FILE}"
           done < <(getAllModules "${PLATFORM}" "${KVERP}")
         fi
+        echo "Update done!"
+        sleep 2
       else
         echo "Error extracting new Version!"
         sleep 5
         updateFailed
       fi
-      echo "Update done!"
-      sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Update Modules" \
       --progressbox "Updating Modules..." 20 70
   fi
@@ -472,6 +468,7 @@ function updateModules() {
 # Update Configs
 function updateConfigs() {
   local ARCNIC="$(readConfigKey "arc.nic" "${USER_CONFIG_FILE}")"
+  local ARCKEY="$(readConfigKey "arc.key" "${USER_CONFIG_FILE}")"
   if [ -z "${1}" ]; then
     # Check for new Version
     idx=0
@@ -494,7 +491,6 @@ function updateConfigs() {
     (
       # Download update file
       local URL="https://github.com/AuxXxilium/arc-configs/releases/download/${TAG}/configs.zip"
-      local SHA="https://github.com/AuxXxilium/arc-configs/releases/download/${TAG}/checksum.sha256"
       echo "Downloading ${TAG}"
       if [ "${ARCNIC}" == "auto" ]; then
         curl -#kL "${URL}" -o "${TMP_PATH}/configs.zip" 2>&1 | while IFS= read -r -n1 char; do
@@ -502,31 +498,31 @@ function updateConfigs() {
           [[ $char == % ]] && echo "Download: $progress%" && progress="" && keep=0 ;
           [[ $keep == 1 ]] && progress="$progress$char" ;
         done
-        curl -skL "${SHA}" -o "${TMP_PATH}/checksum.sha256"
       else
         curl --interface ${ARCNIC} -#kL "${URL}" -o "${TMP_PATH}/configs.zip" 2>&1 | while IFS= read -r -n1 char; do
           [[ $char =~ [0-9] ]] && keep=1 ;
           [[ $char == % ]] && echo "Download: $progress%" && progress="" && keep=0 ;
           [[ $keep == 1 ]] && progress="$progress$char" ;
         done
-        curl --interface ${ARCNIC} -skL "${SHA}" -o "${TMP_PATH}/checksum.sha256"
       fi
-      if [ "$(sha256sum "${TMP_PATH}/configs.zip" | awk '{print $1}')" = "$(cat ${TMP_PATH}/checksum.sha256 | awk '{print $1}')" ]; then
+      if [ -f "${TMP_PATH}/configs.zip" ]; then
         echo "Download successful!"
-        rm -rf "${MODEL_CONFIG_PATH}"
         mkdir -p "${MODEL_CONFIG_PATH}"
         echo "Installing new Configs..."
+        [ -n "${ARCKEY}" ] && cp -f "${S_FILE}" "${TMP_PATH}/serials.yml"
         unzip -oq "${TMP_PATH}/configs.zip" -d "${MODEL_CONFIG_PATH}"
         rm -f "${TMP_PATH}/configs.zip"
+        [ -n "${ARCKEY}" ] && cp -f "${TMP_PATH}/serials.yml" "${S_FILE}"
+        echo "Update done!"
+        sleep 2
       else
         echo "Error extracting new Version!"
         sleep 5
         updateFailed
       fi
-      echo "Update done!"
-      sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Update Configs" \
       --progressbox "Updating Configs..." 20 70
+    writeConfigKey "arc.key" "" "${USER_CONFIG_FILE}"
   fi
   return 0
 }
@@ -578,13 +574,13 @@ function updateLKMs() {
         echo "Installing new LKMs..."
         unzip -oq "${TMP_PATH}/rp-lkms.zip" -d "${LKMS_PATH}"
         rm -f "${TMP_PATH}/rp-lkms.zip"
+        echo "Update done!"
+        sleep 2
       else
         echo "Error extracting new Version!"
         sleep 5
         updateFailed
       fi
-      echo "Update done!"
-      sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Update LKMs" \
       --progressbox "Updating LKMs..." 20 70
   fi
@@ -602,7 +598,7 @@ function updateFailed() {
     exit 1
   else
     echo "Update failed!"
-    exit 1
+    return 1
   fi
 }
 
@@ -617,6 +613,6 @@ function updateFaileddialog() {
   else
     dialog --backtitle "$(backtitle)" --title "Update Failed" \
       --msgbox "Update failed!" 0 0
-    exit 1
+    return 1
   fi
 }

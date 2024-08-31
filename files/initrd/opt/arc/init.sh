@@ -6,7 +6,6 @@ set -e
 . ${ARC_PATH}/include/functions.sh
 . ${ARC_PATH}/include/addons.sh
 . ${ARC_PATH}/include/compat.sh
-. ${ARC_PATH}/boot.sh
 
 # Get Loader Disk Bus
 [ -z "${LOADER_DISK}" ] && die "Loader Disk not found!"
@@ -38,10 +37,10 @@ fi
 # Config Init
 initConfigKey "addons" "{}" "${USER_CONFIG_FILE}"
 initConfigKey "arc" "{}" "${USER_CONFIG_FILE}"
+initConfigKey "arc.branch" "" "${USER_CONFIG_FILE}"
 initConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
 initConfigKey "arc.confdone" "false" "${USER_CONFIG_FILE}"
 initConfigKey "arc.dynamic" "false" "${USER_CONFIG_FILE}"
-initConfigKey "arc.ipv6" "false" "${USER_CONFIG_FILE}"
 initConfigKey "arc.key" "" "${USER_CONFIG_FILE}"
 initConfigKey "arc.nic" "" "${USER_CONFIG_FILE}"
 initConfigKey "arc.offline" "false" "${USER_CONFIG_FILE}"
@@ -51,7 +50,6 @@ initConfigKey "bootipwait" "30" "${USER_CONFIG_FILE}"
 initConfigKey "directboot" "false" "${USER_CONFIG_FILE}"
 initConfigKey "dsmlogo" "true" "${USER_CONFIG_FILE}"
 initConfigKey "emmcboot" "false" "${USER_CONFIG_FILE}"
-initConfigKey "governor" "performance" "${USER_CONFIG_FILE}"
 initConfigKey "hddsort" "false" "${USER_CONFIG_FILE}"
 initConfigKey "kernel" "official" "${USER_CONFIG_FILE}"
 initConfigKey "kernelload" "power" "${USER_CONFIG_FILE}"
@@ -66,14 +64,15 @@ initConfigKey "device.externalcontroller" "false" "${USER_CONFIG_FILE}"
 initConfigKey "keymap" "" "${USER_CONFIG_FILE}"
 initConfigKey "layout" "" "${USER_CONFIG_FILE}"
 initConfigKey "lkm" "prod" "${USER_CONFIG_FILE}"
-# initConfigKey "modblacklist" "evbug,cdc_ether" "${USER_CONFIG_FILE}"
-initConfigKey "modblacklist" "evbug" "${USER_CONFIG_FILE}"
+initConfigKey "modblacklist" "evbug,cdc_ether" "${USER_CONFIG_FILE}"
 initConfigKey "modules" "{}" "${USER_CONFIG_FILE}"
 initConfigKey "model" "" "${USER_CONFIG_FILE}"
 initConfigKey "modelid" "" "${USER_CONFIG_FILE}"
 initConfigKey "network" "{}" "${USER_CONFIG_FILE}"
 initConfigKey "platform" "" "${USER_CONFIG_FILE}"
 initConfigKey "productver" "" "${USER_CONFIG_FILE}"
+initConfigKey "buildnum" "" "${USER_CONFIG_FILE}"
+initConfigKey "smallnum" "" "${USER_CONFIG_FILE}"
 initConfigKey "ramdisk-hash" "" "${USER_CONFIG_FILE}"
 initConfigKey "rd-compressed" "false" "${USER_CONFIG_FILE}"
 initConfigKey "satadom" "2" "${USER_CONFIG_FILE}"
@@ -85,7 +84,10 @@ if grep -q "automated_arc" /proc/cmdline; then
 else
   writeConfigKey "automated" "false" "${USER_CONFIG_FILE}"
 fi
-[ -f "${PART1_PATH}/ARC-BRANCH" ] && initConfigKey "arc.branch" "next" "${USER_CONFIG_FILE}" || initConfigKey "arc.branch" "" "${USER_CONFIG_FILE}"
+if [ -f "${PART1_PATH}/ARC-BRANCH" ]; then
+  ARCBRANCH=$(cat "${PART1_PATH}/ARC-BRANCH") && writeConfigKey "arc.branch" "${ARCBRANCH}" "${USER_CONFIG_FILE}"
+  rm -f "${PART1_PATH}/ARC-BRANCH" >/dev/null 2>&1 || true
+fi
 [ -f "${PART3_PATH}/automated" ] && rm -f "${PART3_PATH}/automated" >/dev/null 2>&1 || true
 # Check for compatibility
 compatboot
@@ -114,7 +116,7 @@ for ETH in ${ETHX}; do
     sleep 1
   fi
   [ "${ETH::3}" = "eth" ] && ethtool -s ${ETH} wol g 2>/dev/null || true
-  [ "${ETH::3}" = "eth" ] && ethtool -K ${ETH} rxhash off 2>/dev/null || true
+  # [ "${ETH::3}" = "eth" ] && ethtool -K ${ETH} rxhash off 2>/dev/null || true
   initConfigKey "${ETH}" "${MACR}" "${USER_CONFIG_FILE}"
 done
 ETHN="$(echo ${ETHX} | wc -w)"
@@ -166,7 +168,7 @@ elif grep -q "update_arc" /proc/cmdline; then
   echo -e "\033[1;34mStarting Update Mode...\033[0m"
 elif [ "${BUILDDONE}" == "true" ]; then
   echo -e "\033[1;34mStarting DSM Mode...\033[0m"
-  bootDSM
+  boot.sh
   exit 0
 else
   echo -e "\033[1;34mStarting Config Mode...\033[0m"
@@ -231,9 +233,9 @@ echo -e "\033[1;34mLoading Arc Overlay...\033[0m"
 RAM=$(free -m | grep -i mem | awk '{print$2}')
 if [ ${RAM} -le 3500 ]; then
   echo -e "\033[1;31mYou have less than 4GB of RAM, if errors occur in loader creation, please increase the amount of RAM.\033[0m\n"
-  echo -e "\033[1;31mUse arc.sh to proceed. Not recommended!\033[0m\n"
+  echo -e "\033[1;31mUse arc.sh to proceed. Not recommended!\033[0m"
 else
- if grep -q "update_arc" /proc/cmdline; then
+  if grep -q "update_arc" /proc/cmdline; then
     update.sh
   else
     arc.sh

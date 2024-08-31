@@ -33,11 +33,12 @@ LKM="$(readConfigKey "lkm" "${USER_CONFIG_FILE}")"
 SN="$(readConfigKey "sn" "${USER_CONFIG_FILE}")"
 LAYOUT="$(readConfigKey "layout" "${USER_CONFIG_FILE}")"
 KEYMAP="$(readConfigKey "keymap" "${USER_CONFIG_FILE}")"
-HDDSORT="$(readConfigKey "hddsort" "${USER_CONFIG_FILE}")"
-CPUGOVERNOR="$(readConfigKey "governor" "${USER_CONFIG_FILE}")"
 KERNEL="$(readConfigKey "kernel" "${USER_CONFIG_FILE}")"
 RD_COMPRESSED="$(readConfigKey "rd-compressed" "${USER_CONFIG_FILE}")"
 PRODUCTVER="$(readConfigKey "productver" "${USER_CONFIG_FILE}")"
+BUILDNUM="$(readConfigKey "buildnum" "${USER_CONFIG_FILE}")"
+SMALLNUM="$(readConfigKey "smallnum" "${USER_CONFIG_FILE}")"
+ARCBRANCH="$(readConfigKey "arc.branch" "${USER_CONFIG_FILE}")"
 # Read new PAT Info from Config
 PAT_URL="$(readConfigKey "paturl" "${USER_CONFIG_FILE}")"
 PAT_HASH="$(readConfigKey "pathash" "${USER_CONFIG_FILE}")"
@@ -48,26 +49,25 @@ PAT_HASH="$(readConfigKey "pathash" "${USER_CONFIG_FILE}")"
 # Check if DSM Version changed
 . "${RAMDISK_PATH}/etc/VERSION"
 
-PRODUCTVERDSM="${majorversion}.${minorversion}"
-if [ "${PRODUCTVERDSM}" != "${PRODUCTVER}" ]; then
-  # Update new buildnumber
-  echo -e "Ramdisk Version ${PRODUCTVER} does not match DSM Version ${PRODUCTVERDSM}!"
-  echo -e "Try to use DSM Version ${PRODUCTVERDSM} for Patch."
-  writeConfigKey "productver" "${PRODUCTVERDSM}" "${USER_CONFIG_FILE}"
-  PRODUCTVER="$(readConfigKey "productver" "${USER_CONFIG_FILE}")"
+if [[ -n "${PRODUCTVER}" && -n "${BUILDNUM}" && -n "${SMALLNUM}" ]] &&
+  ([ "${PRODUCTVER}" != "${majorversion}.${minorversion}" ] || [ "${BUILDNUM}" != "${buildnumber}" ] || [ "${SMALLNUM}" != "${smallfixnumber}" ]); then
+  OLDVER="${PRODUCTVER}(${BUILDNUM}$([ ${SMALLNUM:-0} -ne 0 ] && echo "u${SMALLNUM}"))"
+  NEWVER="${majorversion}.${minorversion}(${buildnumber}$([ ${smallfixnumber:-0} -ne 0 ] && echo "u${smallfixnumber}"))"
   PAT_URL=""
   PAT_HASH=""
 fi
+PRODUCTVER=${majorversion}.${minorversion}
+BUILDNUM=${buildnumber}
+SMALLNUM=${smallfixnumber}
+writeConfigKey "productver" "${PRODUCTVER}" "${USER_CONFIG_FILE}"
+writeConfigKey "buildnum" "${BUILDNUM}" "${USER_CONFIG_FILE}"
+writeConfigKey "smallnum" "${SMALLNUM}" "${USER_CONFIG_FILE}"
 
 # Read model data
 KVER="$(readConfigKey "platforms.${PLATFORM}.productvers.\"${PRODUCTVER}\".kver" "${P_FILE}")"
 
 # Modify KVER for Epyc7002
-if [ "${PLATFORM}" == "epyc7002" ]; then
-  KVERP="${PRODUCTVER}-${KVER}"
-else
-  KVERP="${KVER}"
-fi
+[ "${PLATFORM}" == "epyc7002" ] && KVERP="${PRODUCTVER}-${KVER}" || KVERP="${KVER}"
 
 # Sanity check
 if [ -z "${PLATFORM}" ] || [ -z "${KVER}" ]; then
@@ -114,13 +114,14 @@ for PE in ${PATCHES[@]}; do
   [ ${RET} -ne 0 ] && exit 1
 done
 
-# Patch /etc/synoinfo.conf
 # Add serial number to synoinfo.conf, to help to recovery a installed DSM
 echo "Set synoinfo SN" >"${LOG_FILE}"
 _set_conf_kv "SN" "${SN}" "${RAMDISK_PATH}/etc/synoinfo.conf" >>"${LOG_FILE}" 2>&1 || exit 1
+_set_conf_kv "SN" "${SN}" "${RAMDISK_PATH}/etc.defaults/synoinfo.conf" >>"${LOG_FILE}" 2>&1 || exit 1
 for KEY in ${!SYNOINFO[@]}; do
   echo "Set synoinfo ${KEY}" >>"${LOG_FILE}"
   _set_conf_kv "${KEY}" "${SYNOINFO[${KEY}]}" "${RAMDISK_PATH}/etc/synoinfo.conf" >>"${LOG_FILE}" 2>&1 || exit 1
+  _set_conf_kv "${KEY}" "${SYNOINFO[${KEY}]}" "${RAMDISK_PATH}/etc.defaults/synoinfo.conf" >>"${LOG_FILE}" 2>&1 || exit 1
 done
 
 # Patch /sbin/init.post
@@ -128,12 +129,12 @@ grep -v -e '^[\t ]*#' -e '^$' "${PATCH_PATH}/config-manipulators.sh" >"${TMP_PAT
 sed -e "/@@@CONFIG-MANIPULATORS-TOOLS@@@/ {" -e "r ${TMP_PATH}/rp.txt" -e 'd' -e '}' -i "${RAMDISK_PATH}/sbin/init.post"
 rm -f "${TMP_PATH}/rp.txt"
 touch "${TMP_PATH}/rp.txt"
+echo "_set_conf_kv 'SN' '${SN}' '/tmpRoot/etc/synoinfo.conf'" >>"${TMP_PATH}/rp.txt"
+echo "_set_conf_kv 'SN' '${SN}' '/tmpRoot/etc.defaults/synoinfo.conf'" >>"${TMP_PATH}/rp.txt"
 for KEY in ${!SYNOINFO[@]}; do
   echo "_set_conf_kv '${KEY}' '${SYNOINFO[${KEY}]}' '/tmpRoot/etc/synoinfo.conf'" >>"${TMP_PATH}/rp.txt"
   echo "_set_conf_kv '${KEY}' '${SYNOINFO[${KEY}]}' '/tmpRoot/etc.defaults/synoinfo.conf'" >>"${TMP_PATH}/rp.txt"
 done
-echo "_set_conf_kv 'SN' '${SN}' '/tmpRoot/etc/synoinfo.conf'" >>"${TMP_PATH}/rp.txt"
-echo "_set_conf_kv 'SN' '${SN}' '/tmpRoot/etc.defaults/synoinfo.conf'" >>"${TMP_PATH}/rp.txt"
 sed -e "/@@@CONFIG-GENERATED@@@/ {" -e "r ${TMP_PATH}/rp.txt" -e 'd' -e '}' -i "${RAMDISK_PATH}/sbin/init.post"
 rm -f "${TMP_PATH}/rp.txt"
 
@@ -141,7 +142,7 @@ rm -f "${TMP_PATH}/rp.txt"
 installModules "${PLATFORM}" "${KVERP}" "${!MODULES[@]}" || exit 1
 
 # Copying fake modprobe
-cp -f "${PATCH_PATH}/iosched-trampoline.sh" "${RAMDISK_PATH}/usr/sbin/modprobe"
+[ $(echo "${KVER:-4}" | cut -d'.' -f1) -lt 5 ] && cp -f "${PATCH_PATH}/iosched-trampoline.sh" "${RAMDISK_PATH}/usr/sbin/modprobe"
 # Copying LKM to /usr/lib/modules
 gzip -dc "${LKMS_PATH}/rp-${PLATFORM}-${KVERP}-${LKM}.ko.gz" >"${RAMDISK_PATH}/usr/lib/modules/rp.ko" 2>"${LOG_FILE}" || exit 1
 
@@ -152,8 +153,10 @@ echo "#!/bin/sh" >"${RAMDISK_PATH}/addons/addons.sh"
 echo 'echo "addons.sh called with params ${@}"' >>"${RAMDISK_PATH}/addons/addons.sh"
 echo "export LOADERLABEL=\"ARC\"" >>"${RAMDISK_PATH}/addons/addons.sh"
 echo "export LOADERVERSION=\"${ARC_VERSION}\"" >>"${RAMDISK_PATH}/addons/addons.sh"
+echo "export LOADERBRANCH=\"${ARCBRANCH}\"" >>"${RAMDISK_PATH}/addons/addons.sh"
 echo "export PLATFORM=\"${PLATFORM}\"" >>"${RAMDISK_PATH}/addons/addons.sh"
 echo "export PRODUCTVER=\"${PRODUCTVER}\"" >>"${RAMDISK_PATH}/addons/addons.sh"
+echo "export PRODUCTVERL=\"${PRODUCTVERL}\"" >>"${RAMDISK_PATH}/addons/addons.sh"
 echo "export MODEL=\"${MODEL}\"" >>"${RAMDISK_PATH}/addons/addons.sh"
 echo "export MODELID=\"${MODELID}\"" >>"${RAMDISK_PATH}/addons/addons.sh"
 echo "export MLINK=\"${PAT_URL}\"" >>"${RAMDISK_PATH}/addons/addons.sh"
@@ -163,13 +166,12 @@ echo "export KEYMAP=\"${KEYMAP}\"" >>"${RAMDISK_PATH}/addons/addons.sh"
 chmod +x "${RAMDISK_PATH}/addons/addons.sh"
 
 # System Addons
-for ADDON in "redpill" "revert" "misc" "eudev" "disks" "localrss" "notify" "updatenotify" "wol" "mountloader" "powersched" "cpufreqscaling"; do
+for ADDON in "redpill" "revert" "misc" "eudev" "disks" "localrss" "notify" "updatenotify" "wol" "mountloader"; do
   PARAMS=""
   if [ "${ADDON}" == "disks" ]; then
+    HDDSORT="$(readConfigKey "hddsort" "${USER_CONFIG_FILE}")"
     PARAMS=${HDDSORT}
     [ -f "${USER_UP_PATH}/${MODEL}.dts" ] && cp -f "${USER_UP_PATH}/${MODEL}.dts" "${RAMDISK_PATH}/addons/model.dts"
-  elif [ "${ADDON}" == "cpufreqscaling" ]; then
-    PARAMS=${CPUGOVERNOR}
   fi
   installAddon "${ADDON}" "${PLATFORM}" || exit 1
   echo "/addons/${ADDON}.sh \${1} ${PARAMS}" >>"${RAMDISK_PATH}/addons/addons.sh" 2>>"${LOG_FILE}" || exit 1

@@ -229,14 +229,14 @@ function _sort_netif() {
   local ETHLIST=""
   local ETHX="$(ls /sys/class/net/ 2>/dev/null | grep eth)" # real network cards list
   for ETH in ${ETHX}; do
-    local MAC="$(cat /sys/class/net/${ETH}/address 2>/dev/null | sed 's/://g' | tr '[:upper:]' '[:lower:]')"
+    local MAC="$(cat /sys/class/net/${ETH}/address 2>/dev/null | sed 's/://g; s/.*/\L&/')"
     local ETHBUS="$(ethtool -i ${ETH} 2>/dev/null | grep bus-info | cut -d' ' -f2)"
     ETHLIST="${ETHLIST}${ETHBUS} ${MAC} ${ETH}\n"
   done
   local ETHLISTTMPM=""
   local ETHLISTTMPB="$(echo -e "${ETHLIST}" | sort)"
   if [ -n "${1}" ]; then
-    local MACS="$(echo "${1}" | sed 's/://g' | tr '[:upper:]' '[:lower:]' | tr ',' ' ')"
+    local MACS="$(echo "${1}" | sed 's/://g; s/,/ /g; s/.*/\L&/')"
     for MACX in ${MACS}; do
       ETHLISTTMPM="${ETHLISTTMPM}$(echo -e "${ETHLISTTMPB}" | grep "${MACX}")\n"
       ETHLISTTMPB="$(echo -e "${ETHLISTTMPB}" | grep -v "${MACX}")\n"
@@ -549,7 +549,7 @@ function ntpCheck() {
     /etc/init.d/S49ntpd restart > /dev/null 2>&1
     hwclock -w > /dev/null 2>&1
   fi
-  if [ -z "${LAYOUT}"]; then
+  if [ -z "${LAYOUT}" ]; then
     [ -n "${KEYMAP}" ] && KEYMAP="$(echo ${KEYMAP} | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]' | tr -d '[:punct:]' | tr -d '[:digit:]')"
     [ -n "${KEYMAP}" ] && writeConfigKey "keymap" "${KEYMAP}" "${USER_CONFIG_FILE}"
     [ -z "${KEYMAP}" ] && KEYMAP="us"
@@ -589,21 +589,22 @@ function offlineCheck() {
     done
     if [ -n "${ARCNIC}" ]; then
       OFFLINE="false"
-    elif [ -z "${ARCNIC}" ] && [ "${AUTOMATED}" == "false" ]; then
-      dialog --backtitle "$(backtitle)" --title "Online Check" \
-        --msgbox "Could not connect to Github.\nSwitch to Offline Mode!" 0 0
+    elif [ -z "${ARCNIC}" ]; then
+      if [ "${AUTOMATED}" == "false" ]; then
+        dialog --backtitle "$(backtitle)" --title "Online Check" \
+          --infobox "Could not connect to Github.\nSwitch to Offline Mode!" 0 0
+      else
+        dialog --backtitle "$(backtitle)" --title "Online Check" \
+          --infobox "Could not connect to Github.\nSwitch to Offline Mode!\nDisable Automated Mode!" 0 0
+      fi
+      sleep 5
       cp -f "${PART3_PATH}/configs/offline.json" "${ARC_PATH}/include/offline.json"
-      ARCNIC="offline"
-      OFFLINE="true"
-    elif [ -z "${ARCNIC}" ] && [ "${AUTOMATED}" == "true" ]; then
-      dialog --backtitle "$(backtitle)" --title "Online Check" \
-        --msgbox "Could not connect to Github.\nSwitch to Offline Mode!\nDisable Automated Mode!" 0 0
-      writeConfigKey "automated" "false" "${USER_CONFIG_FILE}"
-      [ -f "${PART3_PATH}/automated" ] && rm -f "${PART3_PATH}/automated" >/dev/null
+      AUTOMATED="false"
       ARCNIC="offline"
       OFFLINE="true"
     fi
   fi
+  writeConfigKey "automated" "${AUTOMATED}" "${USER_CONFIG_FILE}"
   writeConfigKey "arc.nic" "${ARCNIC}" "${USER_CONFIG_FILE}"
   writeConfigKey "arc.offline" "${OFFLINE}" "${USER_CONFIG_FILE}"
 }
@@ -642,8 +643,16 @@ function systemCheck () {
   else
     CPUFREQ="false"
   fi
-  # Screen Timeout
-  checkCmdline "arc_cmdline" "nomodeset" && SCREENOFF="false" || SCREENOFF="true"
+  # Check for ARCKEY
+  ARCKEY="$(readConfigKey "arc.key" "${USER_CONFIG_FILE}")"
+  if openssl enc -in "${S_FILE_ENC}" -out "${S_FILE_ARC}" -d -aes-256-cbc -k "${ARCKEY}" 2>/dev/null; then
+    cp -f "${S_FILE_ARC}" "${S_FILE}"
+    writeConfigKey "arc.key" "${ARCKEY}" "${USER_CONFIG_FILE}"
+  else
+    [ -f "${S_FILE}.bak" ] && cp -f "${S_FILE}" "${S_FILE}.bak"
+    writeConfigKey "arc.key" "" "${USER_CONFIG_FILE}"
+    writeConfigKey "arc.patch" "false" "${USER_CONFIG_FILE}"
+  fi
 }
 
 ###############################################################################
