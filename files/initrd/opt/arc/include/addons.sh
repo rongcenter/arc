@@ -6,17 +6,37 @@ function availableAddons() {
     echo ""
     return 1
   fi
+  local ARCOFFLINE="$(readConfigKey "arc.offline" "${USER_CONFIG_FILE}")"
+  local ARCCONF="$(readConfigKey "${MODEL}.serial" "${S_FILE}")"
   for D in $(find "${ADDONS_PATH}" -maxdepth 1 -type d 2>/dev/null | sort); do
     [ ! -f "${D}/manifest.yml" ] && continue
-    ADDON=$(basename ${D})
-    AVAILABLE="$(readConfigKey "${1}" "${D}/manifest.yml")"
+    local ADDON=$(basename ${D})
+    local AVAILABLE="$(readConfigKey "${1}" "${D}/manifest.yml")"
     [ "${AVAILABLE}" = false ] && continue
-    SYSTEM=$(readConfigKey "system" "${D}/manifest.yml")
+    local SYSTEM=$(readConfigKey "system" "${D}/manifest.yml")
     [ "${SYSTEM}" = true ] && continue
-    DESC="$(readConfigKey "description" "${D}/manifest.yml")"
-    BETA="$(readConfigKey "beta" "${D}/manifest.yml")"
+    if [[ "${ARCOFFLINE}" = "true" || -z "${ARCCONF}" ]] && [[ "${ADDON}" = "amepatch" || "${ADDON}" = "arcdns" ]]; then
+      continue
+    fi
+    if [ "${MACHINE}" != "Native" ] && [ "${ADDON}" = "cpufreqscaling" ]; then
+      continue
+    fi
+    if echo "${PAT_URL}" 2>/dev/null | grep -vq "7.2.2"; then
+      if [ "${ADDON}" = "allowdowngrade" ]; then
+        continue
+      fi
+    fi
+    local DESC="$(readConfigKey "description" "${D}/manifest.yml")"
+    local BETA="$(readConfigKey "beta" "${D}/manifest.yml")"
+    local TARGET="$(readConfigKey "target" "${D}/manifest.yml")"
     [ "${BETA}" = true ] && BETA="(Beta) " || BETA=""
-    [ "${AVAILABLE}" = true ] && echo -e "${ADDON}\t${BETA}${DESC}"
+    if [ "${TARGET}" = "app" ]; then
+      [ "${AVAILABLE}" = true ] && echo -e "${ADDON}\t\Z4${BETA}${DESC}\Zn"
+    elif [ "${TARGET}" = "system" ]; then
+      [ "${AVAILABLE}" = true ] && echo -e "${ADDON}\t\Z1${BETA}${DESC}\Zn"
+    else
+      [ "${AVAILABLE}" = true ] && echo -e "${ADDON}\t${BETA}${DESC}"
+    fi
   done
 }
 

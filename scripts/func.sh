@@ -1,319 +1,280 @@
 #!/usr/bin/env bash
 #
-# Copyright (C) 2023 AuxXxilium <https://github.com/AuxXxilium> and Ing <https://github.com/wjz304>
+# Copyright (C) 2024 AuxXxilium <https://github.com/AuxXxilium>
 # 
 # This is free software, licensed under the MIT License.
 # See /LICENSE for more information.
 #
 
-# Get Extractor
-# $1 path
-function getExtractor() {
-  echo "Getting syno extractor begin"
-  local DEST_PATH="${1:-extractor}"
-  local CACHE_DIR="/tmp/pat"
-  rm -rf "${CACHE_DIR}"
-  mkdir -p "${CACHE_DIR}"
-  # Download pat file
-  # global.synologydownload.com, global.download.synology.com, cndl.synology.cn
-  local PAT_URL="https://global.synologydownload.com/download/DSM/release/7.0.1/42218/DSM_DS3622xs%2B_42218.pat"
-  local PAT_FILE="DSM_DS3622xs+_42218.pat"
-  local STATUS=$(curl -# -w "%{http_code}" -L "${PAT_URL}" -o "${CACHE_DIR}/${PAT_FILE}")
-  if [ $? -ne 0 ] || [ ${STATUS} -ne 200 ]; then
-    echo "[E] DSM_DS3622xs%2B_42218.pat download error!"
-    rm -rf ${CACHE_DIR}
-    exit 1
-  fi
-
-  mkdir -p "${CACHE_DIR}/ramdisk"
-  tar -C "${CACHE_DIR}/ramdisk/" -xf "${CACHE_DIR}/${PAT_FILE}" rd.gz 2>&1
-  if [ $? -ne 0 ]; then
-    echo "[E] extractor rd.gz error!"
-    rm -rf ${CACHE_DIR}
-    exit 1
-  fi
-  (
-    cd "${CACHE_DIR}/ramdisk"
-    xz -dc <rd.gz | cpio -idm
-  ) >/dev/null 2>&1 || true
-
-  rm -rf "${DEST_PATH}"
-  mkdir -p "${DEST_PATH}"
-
-  # Copy only necessary files
-  for f in libcurl.so.4 libmbedcrypto.so.5 libmbedtls.so.13 libmbedx509.so.1 libmsgpackc.so.2 libsodium.so libsynocodesign-ng-virtual-junior-wins.so.7; do
-    cp -f "${CACHE_DIR}/ramdisk/usr/lib/${f}" "${DEST_PATH}"
-  done
-  cp -f "${CACHE_DIR}/ramdisk/usr/syno/bin/scemd" "${DEST_PATH}/syno_extract_system_patch"
-
-  # Clean up
-  rm -rf ${CACHE_DIR}
-  echo "Getting syno extractor end"
-}
+[ -n "${1}" ] && export TOKEN="${1}"
 
 # Get latest LKMs
 # $1 path
 function getLKMs() {
   echo "Getting LKMs begin"
-  local DEST_PATH="${1:-lkms}"
+  local DEST_PATH="${1}"
   local CACHE_FILE="/tmp/rp-lkms.zip"
   rm -f "${CACHE_FILE}"
-  if [ -n "${LKMTAG}" ]; then
-    TAG="${LKMTAG}"
+  TAG="$(curl -s "https://api.github.com/repos/AuxXxilium/arc-lkm/releases/latest" | grep -oP '"tag_name": "\K(.*)(?=")')"
+  export LKMTAG="${TAG}"
+  if curl -skL "https://github.com/AuxXxilium/arc-lkm/releases/download/${TAG}/rp-lkms.zip" -o "${CACHE_FILE}"; then
+    # Unzip LKMs
+    rm -rf "${DEST_PATH}"
+    mkdir -p "${DEST_PATH}"
+    unzip -o "${CACHE_FILE}" -d "${DEST_PATH}"
+    rm -f "${CACHE_FILE}"
+    echo "Getting LKMs end - ${TAG}"
   else
-    TAG="$(curl -s "https://api.github.com/repos/AuxXxilium/arc-lkm/releases/latest" | grep -oP '"tag_name": "\K(.*)(?=")')"
+    echo "Failed to get LKMs"
+    exit 1
   fi
-  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-lkm/releases/download/${TAG}/rp-lkms.zip" -o "${CACHE_FILE}")
-  echo "TAG=${TAG}; Status=${STATUS}"
-  [ ${STATUS} -ne 200 ] && exit 1
-  # Unzip LKMs
-  rm -rf "${DEST_PATH}"
-  mkdir -p "${DEST_PATH}"
-  unzip "${CACHE_FILE}" -d "${DEST_PATH}"
-  rm -f "${CACHE_FILE}"
-  echo "Getting LKMs end - ${TAG}"
 }
 
 # Get latest Addons
 # $1 path
 function getAddons() {
   echo "Getting Addons begin"
-  local DEST_PATH="${1:-addons}"
+  local DEST_PATH="${1}"
   local CACHE_DIR="/tmp/addons"
   local CACHE_FILE="/tmp/addons.zip"
-  if [ -n "${ADDONSTAG}" ]; then
-    TAG="${ADDONSTAG}"
+  TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-addons/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+  export ADDONTAG="${TAG}"
+  if curl -skL "https://github.com/AuxXxilium/arc-addons/releases/download/${TAG}/addons-${TAG}.zip" -o "${CACHE_FILE}"; then
+    # Unzip Addons
+    rm -rf "${CACHE_DIR}"
+    mkdir -p "${CACHE_DIR}"
+    mkdir -p "${DEST_PATH}"
+    unzip -o "${CACHE_FILE}" -d "${CACHE_DIR}"
+    echo "Installing Addons to ${DEST_PATH}"
+    [ -f /tmp/addons/VERSION ] && cp -f /tmp/addons/VERSION ${DEST_PATH}/
+    for PKG in $(ls ${CACHE_DIR}/*.addon); do
+      ADDON=$(basename "${PKG}" .addon)
+      mkdir -p "${DEST_PATH}/${ADDON}"
+      echo "Extracting ${PKG} to ${DEST_PATH}/${ADDON}"
+      tar -xaf "${PKG}" -C "${DEST_PATH}/${ADDON}"
+    done
+    rm -f "${CACHE_FILE}"
+    echo "Getting Addons end - ${TAG}"
   else
-    TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-addons/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+    echo "Failed to get Addons"
+    exit 1
   fi
-  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-addons/releases/download/${TAG}/addons.zip" -o "${CACHE_FILE}")
-  echo "TAG=${TAG}; Status=${STATUS}"
-  [ ${STATUS} -ne 200 ] && exit 1
-  rm -rf "${DEST_PATH}"
-  mkdir -p "${DEST_PATH}"
-  # Install Addons
-  rm -rf "${CACHE_DIR}"
-  mkdir -p "${CACHE_DIR}"
-  unzip "${CACHE_FILE}" -d "${CACHE_DIR}"
-  echo "Installing Addons to ${DEST_PATH}"
-  [ -f /tmp/addons/VERSION ] && cp -f /tmp/addons/VERSION ${DEST_PATH}/
-  for PKG in $(ls ${CACHE_DIR}/*.addon); do
-    ADDON=$(basename "${PKG}" .addon)
-    mkdir -p "${DEST_PATH}/${ADDON}"
-    echo "Extracting ${PKG} to ${DEST_PATH}/${ADDON}"
-    tar -xaf "${PKG}" -C "${DEST_PATH}/${ADDON}"
-  done
-  rm -f "${CACHE_FILE}"
-  echo "Getting Addons end - ${TAG}"
 }
 
 # Get latest Modules
 # $1 path
 function getModules() {
   echo "Getting Modules begin"
-  local DEST_PATH="${1:-modules}"
+  local DEST_PATH="${1}"
   local CACHE_FILE="/tmp/modules.zip"
   rm -f "${CACHE_FILE}"
-  if [ -n "${MODULESTAG}" ]; then
-    TAG="${MODULESTAG}"
+  TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-modules/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+  export MODULETAG="${TAG}"
+  if curl -skL "https://github.com/AuxXxilium/arc-modules/releases/download/${TAG}/modules-${TAG}.zip" -o "${CACHE_FILE}"; then
+    # Unzip Modules
+    rm -rf "${DEST_PATH}"
+    mkdir -p "${DEST_PATH}"
+    unzip -o "${CACHE_FILE}" -d "${DEST_PATH}"
+    echo "Getting Modules end - ${TAG}"
   else
-    TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-modules/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+    echo "Failed to get Modules"
+    exit 1
   fi
-  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-modules/releases/download/${TAG}/modules.zip" -o "${CACHE_FILE}")
-  echo "TAG=${TAG}; Status=${STATUS}"
-  [ ${STATUS} -ne 200 ] && exit 1
-  # Unzip Modules
-  rm -rf "${DEST_PATH}"
-  mkdir -p "${DEST_PATH}"
-  unzip "${CACHE_FILE}" -d "${DEST_PATH}"
-  rm -f "${CACHE_FILE}"
-  echo "Getting Modules end - ${TAG}"
 }
 
 # Get latest Configs
 # $1 path
 function getConfigs() {
   echo "Getting Configs begin"
-  local DEST_PATH="${1:-configs}"
+  local DEST_PATH="${1}"
   local CACHE_FILE="/tmp/configs.zip"
   rm -f "${CACHE_FILE}"
-  if [ -n "${CONFIGSTAG}" ]; then
-    TAG="${CONFIGSTAG}"
+  TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-configs/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+  export CONFIGTAG="${TAG}"
+  if curl -skL "https://github.com/AuxXxilium/arc-configs/releases/download/${TAG}/configs-${TAG}.zip" -o "${CACHE_FILE}"; then
+    # Unzip Configs
+    rm -rf "${DEST_PATH}"
+    mkdir -p "${DEST_PATH}"
+    unzip -o "${CACHE_FILE}" -d "${DEST_PATH}"
+    rm -f "${CACHE_FILE}"
+    echo "Getting Configs end - ${TAG}"
   else
-    TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-configs/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+    echo "Failed to get Configs"
+    exit 1
   fi
-  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-configs/releases/download/${TAG}/configs.zip" -o "${CACHE_FILE}")
-  echo "TAG=${TAG}; Status=${STATUS}"
-  [ ${STATUS} -ne 200 ] && exit 1
-  # Unzip Configs
-  rm -rf "${DEST_PATH}"
-  mkdir -p "${DEST_PATH}"
-  unzip "${CACHE_FILE}" -d "${DEST_PATH}"
-  rm -f "${CACHE_FILE}"
-  echo "Getting Configs end - ${TAG}"
 }
 
 # Get latest Patches
 # $1 path
 function getPatches() {
   echo "Getting Patches begin"
-  local DEST_PATH="${1:-patches}"
+  local DEST_PATH="${1}"
   local CACHE_FILE="/tmp/patches.zip"
   rm -f "${CACHE_FILE}"
-  if [ -n "${PATCHESTAG}" ]; then
-    TAG="${PATCHESTAG}"
+  TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-patches/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+  export PATCHTAG="${TAG}"
+  if curl -skL "https://github.com/AuxXxilium/arc-patches/releases/download/${TAG}/patches-${TAG}.zip" -o "${CACHE_FILE}"; then
+    # Unzip Patches
+    rm -rf "${DEST_PATH}"
+    mkdir -p "${DEST_PATH}"
+    unzip -o "${CACHE_FILE}" -d "${DEST_PATH}"
+    rm -f "${CACHE_FILE}"
+    echo "Getting Patches end - ${TAG}"
   else
-    TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-patches/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+    echo "Failed to get Patches"
+    exit 1
   fi
-  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-patches/releases/download/${TAG}/patches.zip" -o "${CACHE_FILE}")
-  echo "TAG=${TAG}; Status=${STATUS}"
-  [ ${STATUS} -ne 200 ] && exit 1
-  # Unzip Patches
-  rm -rf "${DEST_PATH}"
-  mkdir -p "${DEST_PATH}"
-  unzip "${CACHE_FILE}" -d "${DEST_PATH}"
-  rm -f "${CACHE_FILE}"
-  echo "Getting Patches end - ${TAG}"
 }
 
 # Get latest Custom
 # $1 path
 function getCustom() {
   echo "Getting Custom begin"
-  local DEST_PATH="${1:-custom}"
+  local DEST_PATH="${1}"
   local CACHE_FILE="/tmp/custom.zip"
   rm -f "${CACHE_FILE}"
-  if [ -n "${CUSTOMTAG}" ]; then
-    TAG="${CUSTOMTAG}"
+  TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-custom/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+  export CUSTOMTAG="${TAG}"
+  if curl -skL "https://github.com/AuxXxilium/arc-custom/releases/download/${TAG}/custom-${TAG}.zip" -o "${CACHE_FILE}"; then
+    # Unzip Custom
+    rm -rf "${DEST_PATH}"
+    mkdir -p "${DEST_PATH}"
+    unzip -o "${CACHE_FILE}" -d "${DEST_PATH}"
+    rm -f "${CACHE_FILE}"
+    echo "Getting Custom end - ${TAG}"
   else
-    TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-custom/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+    echo "Failed to get Custom"
+    exit 1
   fi
-  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-custom/releases/download/${TAG}/custom.zip" -o "${CACHE_FILE}")
-  echo "TAG=${TAG}; Status=${STATUS}"
-  [ ${STATUS} -ne 200 ] && exit 1
-  # Unzip Custom
-  rm -rf "${DEST_PATH}"
-  mkdir -p "${DEST_PATH}"
-  unzip "${CACHE_FILE}" -d "${DEST_PATH}"
-  rm -f "${CACHE_FILE}"
-  echo "Getting Custom end - ${TAG}"
 }
 
 # Get latest Theme
 # $1 path
 function getTheme() {
   echo "Getting Theme begin"
-  local DEST_PATH="${1:-theme}"
+  local DEST_PATH="${1}"
   local CACHE_FILE="/tmp/theme.zip"
   rm -f "${CACHE_FILE}"
-  if [ -n "${THEMETAG}" ]; then
-    TAG="${THEMETAG}"
+  TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-theme/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+  export THEMETAG="${TAG}"
+  if curl -skL "https://github.com/AuxXxilium/arc-theme/releases/download/${TAG}/arc-theme-${TAG}.zip" -o "${CACHE_FILE}"; then
+    # Unzip Theme
+    mkdir -p "${DEST_PATH}"
+    unzip -o "${CACHE_FILE}" -d "${DEST_PATH}"
+    rm -f "${CACHE_FILE}"
+    echo "Getting Theme end - ${TAG}"
   else
-    TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-theme/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
+    echo "Failed to get Theme"
+    exit 1
   fi
-  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-theme/releases/download/${TAG}/arc-theme.zip" -o "${CACHE_FILE}")
-  echo "TAG=${TAG}; Status=${STATUS}"
-  [ ${STATUS} -ne 200 ] && exit 1
-  # Unzip Theme
-  mkdir -p "${DEST_PATH}"
-  unzip "${CACHE_FILE}" -d "${DEST_PATH}"
-  rm -f "${CACHE_FILE}"
-  echo "Getting Theme end - ${TAG}"
 }
 
 # Get latest Buildroot-X
-# $1 TAG
-# $2 path
+# $1 path
 function getBuildrootx() {
   echo "Getting Buildroot-X begin"
-  TAG="${1:-latest}"
-  local DEST_PATH="${2:-brx}"
+  local DEST_PATH="${1}"
 
-  if [ "${TAG}" = "latest" ]; then
-    TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-buildroot-x/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
-  fi
+  TAG=$(curl -skL -H "Authorization: token ${TOKEN}" "https://api.github.com/repos/AuxXxilium/arc-buildroot-x/releases" | jq -r ".[].tag_name" | sort -rV | head -1)
+  export BRXTAG="${TAG}"
   [ ! -d "${DEST_PATH}" ] && mkdir -p "${DEST_PATH}"
   rm -f "${DEST_PATH}/bzImage-arc"
-  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-buildroot-x/releases/download/${TAG}/bzImage" -o "${DEST_PATH}/bzImage-arc")
-  echo "TAG=${TAG}; Status=${STATUS}"
-  [ ${STATUS} -ne 200 ] && exit 1
-
   rm -f "${DEST_PATH}/initrd-arc"
-  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-buildroot-x/releases/download/${TAG}/rootfs.cpio.xz" -o "${DEST_PATH}/initrd-arc")
-  echo "TAG=${TAG}; Status=${STATUS}"
-  [ ${STATUS} -ne 200 ] && exit 1
-
-  echo "Getting Buildroot-X end - ${TAG}"
+  while read -r ID NAME; do
+    if [ "${NAME}" = "buildroot-${TAG}.zip" ]; then
+      curl -kL -H "Authorization: token ${TOKEN}" -H "Accept: application/octet-stream" "https://api.github.com/repos/AuxXxilium/arc-buildroot-x/releases/assets/${ID}" -o "${DEST_PATH}/brx.zip"
+      echo "Buildroot-X: ${TAG}"
+      unzip -o "${DEST_PATH}/brx.zip" -d "${DEST_PATH}"
+      mv -f "${DEST_PATH}/bzImage" "${DEST_PATH}/bzImage-arc"
+      mv -f "${DEST_PATH}/rootfs.cpio.zst" "${DEST_PATH}/initrd-arc"
+      [ -f "${DEST_PATH}/bzImage-arc" ] && [ -f "${DEST_PATH}/initrd-arc" ] && break
+    fi
+  done <<<$(curl -skL -H "Authorization: token ${TOKEN}" "https://api.github.com/repos/AuxXxilium/arc-buildroot-x/releases/tags/${TAG}" | jq -r '.assets[] | "\(.id) \(.name)"')
 }
 
 # Get latest Buildroot-S
-# $1 TAG
-# $2 path
+# $1 path
 function getBuildroots() {
   echo "Getting Buildroot-S begin"
-  TAG="${1:-latest}"
-  local DEST_PATH="${2:-brs}"
+  local DEST_PATH="${1}"
 
-  if [ "${TAG}" = "latest" ]; then
-    TAG="$(curl -s https://api.github.com/repos/AuxXxilium/arc-buildroot-s/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')"
-  fi
+  TAG=$(curl -skL -H "Authorization: token ${TOKEN}" "https://api.github.com/repos/AuxXxilium/arc-buildroot-s/releases" | jq -r ".[].tag_name" | sort -rV | head -1)
+  export BRSTAG="${TAG}"
   [ ! -d "${DEST_PATH}" ] && mkdir -p "${DEST_PATH}"
   rm -f "${DEST_PATH}/bzImage-arc"
-  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-buildroot-s/releases/download/${TAG}/bzImage" -o "${DEST_PATH}/bzImage-arc")
-  echo "TAG=${TAG}; Status=${STATUS}"
-  [ ${STATUS} -ne 200 ] && exit 1
-
   rm -f "${DEST_PATH}/initrd-arc"
-  STATUS=$(curl -w "%{http_code}" -L "https://github.com/AuxXxilium/arc-buildroot-s/releases/download/${TAG}/rootfs.cpio.xz" -o "${DEST_PATH}/initrd-arc")
-  echo "TAG=${TAG}; Status=${STATUS}"
-  [ ${STATUS} -ne 200 ] && exit 1
-
-  echo "Getting Buildroot-S end - ${TAG}"
+  while read -r ID NAME; do
+    if [ "${NAME}" = "buildroot-${TAG}.zip" ]; then
+      curl -kL -H "Authorization: token ${TOKEN}" -H "Accept: application/octet-stream" "https://api.github.com/repos/AuxXxilium/arc-buildroot-s/releases/assets/${ID}" -o "${DEST_PATH}/brs.zip"
+      echo "Buildroot-S: ${TAG}"
+      unzip -o "${DEST_PATH}/brs.zip" -d "${DEST_PATH}"
+      mv -f "${DEST_PATH}/bzImage" "${DEST_PATH}/bzImage-arc"
+      mv -f "${DEST_PATH}/rootfs.cpio.zst" "${DEST_PATH}/initrd-arc"
+      [ -f "${DEST_PATH}/bzImage-arc" ] && [ -f "${DEST_PATH}/initrd-arc" ] && break
+    fi
+  done <<<$(curl -skL -H "Authorization: token ${TOKEN}" "https://api.github.com/repos/AuxXxilium/arc-buildroot-s/releases/tags/${TAG}" | jq -r '.assets[] | "\(.id) \(.name)"')
 }
 
 # Get latest Offline
 # $1 path
 function getOffline() {
   echo "Getting Offline begin"
-  local DEST_PATH="${1:-configs}"
+  local DEST_PATH="${1}"
 
   [ ! -d "${DEST_PATH}" ] && mkdir -p "${DEST_PATH}"
-  rm -f "${DEST_PATH}/offline.json"
-  STATUS=$(curl -w "%{http_code}" -L "https://autoupdate.synology.com/os/v2" -o "${DEST_PATH}/offline.json")
-  echo "Status=${STATUS}"
-  [ ${STATUS} -ne 200 ] && exit 1
-
-  echo "Getting Offline end"
+  rm -f "${DEST_PATH}/data.yml"
+  if curl -skL "https://raw.githubusercontent.com/AuxXxilium/arc-dsm/refs/heads/main/data.yml" -o "${DEST_PATH}/data.yml"; then
+    echo "Getting Offline end"
+  else
+    echo "Failed to get Offline"
+    exit 1
+  fi
 }
 
 # repack initrd
-# $1 initrd file  
+# $1 initrd file
 # $2 plugin path
 # $3 output file
 function repackInitrd() {
-  INITRD_FILE="${1}"
-  PLUGIN_PATH="${2}"
-  OUTPUT_PATH="${3:-${INITRD_FILE}}"
+  local INITRD_FILE="${1}"
+  local PLUGIN_PATH="${2}"
+  local OUTPUT_PATH="${3:-${INITRD_FILE}}"
 
   [ -z "${INITRD_FILE}" ] || [ ! -f "${INITRD_FILE}" ] && exit 1
   [ -z "${PLUGIN_PATH}" ] || [ ! -d "${PLUGIN_PATH}" ] && exit 1
-  
-  INITRD_FILE="$(readlink -f "${INITRD_FILE}")"
-  PLUGIN_PATH="$(readlink -f "${PLUGIN_PATH}")"
-  OUTPUT_PATH="$(readlink -f "${OUTPUT_PATH}")"
 
-  RDXZ_PATH="rdxz_tmp"
+  INITRD_FILE="$(realpath "${INITRD_FILE}")"
+  PLUGIN_PATH="$(realpath "${PLUGIN_PATH}")"
+  OUTPUT_PATH="$(realpath "${OUTPUT_PATH}")"
+
+  local RDXZ_PATH="rdxz_tmp"
   mkdir -p "${RDXZ_PATH}"
-  (
-    cd "${RDXZ_PATH}"
-    sudo xz -dc <"${INITRD_FILE}" | sudo cpio -idm
-  ) || true
-  sudo cp -Rf "${PLUGIN_PATH}/"* "${RDXZ_PATH}/"
+  local INITRD_FORMAT=$(file -b --mime-type "${INITRD_FILE}")
+
+  case "${INITRD_FORMAT}" in
+  *'x-cpio'*) (cd "${RDXZ_PATH}" && sudo cpio -idm <"${INITRD_FILE}") >/dev/null 2>&1 ;;
+  *'x-xz'*) (cd "${RDXZ_PATH}" && xz -dc "${INITRD_FILE}" | sudo cpio -idm) >/dev/null 2>&1 ;;
+  *'x-lz4'*) (cd "${RDXZ_PATH}" && lz4 -dc "${INITRD_FILE}" | sudo cpio -idm) >/dev/null 2>&1 ;;
+  *'x-lzma'*) (cd "${RDXZ_PATH}" && lzma -dc "${INITRD_FILE}" | sudo cpio -idm) >/dev/null 2>&1 ;;
+  *'x-bzip2'*) (cd "${RDXZ_PATH}" && bzip2 -dc "${INITRD_FILE}" | sudo cpio -idm) >/dev/null 2>&1 ;;
+  *'gzip'*) (cd "${RDXZ_PATH}" && gzip -dc "${INITRD_FILE}" | sudo cpio -idm) >/dev/null 2>&1 ;;
+  *'zstd'*) (cd "${RDXZ_PATH}" && zstd -dc "${INITRD_FILE}" | sudo cpio -idm) >/dev/null 2>&1 ;;
+  *) ;;
+  esac
+
+  sudo cp -rf "${PLUGIN_PATH}/"* "${RDXZ_PATH}/"
   [ -f "${OUTPUT_PATH}" ] && rm -rf "${OUTPUT_PATH}"
-  (
-    cd "${RDXZ_PATH}"
-    sudo find . 2>/dev/null | sudo cpio -o -H newc -R root:root | xz -9 --check=crc32 >"${OUTPUT_PATH}"
-  ) || true
+
+  case "${INITRD_FORMAT}" in
+  *'x-cpio'*) (cd "${RDXZ_PATH}" && sudo find . 2>/dev/null | sudo cpio -o -H newc -R root:root >"${OUTPUT_PATH}") >/dev/null 2>&1 ;;
+  *'x-xz'*) (cd "${RDXZ_PATH}" && sudo find . 2>/dev/null | sudo cpio -o -H newc -R root:root | xz -9 -C crc32 -c - >"${OUTPUT_PATH}") >/dev/null 2>&1 ;;
+  *'x-lz4'*) (cd "${RDXZ_PATH}" && sudo find . 2>/dev/null | sudo cpio -o -H newc -R root:root | lz4 -9 -l -c - >"${OUTPUT_PATH}") >/dev/null 2>&1 ;;
+  *'x-lzma'*) (cd "${RDXZ_PATH}" && sudo find . 2>/dev/null | sudo cpio -o -H newc -R root:root | lzma -9 -c - >"${OUTPUT_PATH}") >/dev/null 2>&1 ;;
+  *'x-bzip2'*) (cd "${RDXZ_PATH}" && sudo find . 2>/dev/null | sudo cpio -o -H newc -R root:root | bzip2 -9 -c - >"${OUTPUT_PATH}") >/dev/null 2>&1 ;;
+  *'gzip'*) (cd "${RDXZ_PATH}" && sudo find . 2>/dev/null | sudo cpio -o -H newc -R root:root | gzip -9 -c - >"${OUTPUT_PATH}") >/dev/null 2>&1 ;;
+  *'zstd'*) (cd "${RDXZ_PATH}" && sudo find . 2>/dev/null | sudo cpio -o -H newc -R root:root | zstd -19 -T0 -f -c - >"${OUTPUT_PATH}") >/dev/null 2>&1 ;;
+  *) ;;
+  esac
   sudo rm -rf "${RDXZ_PATH}"
 }
 
@@ -329,8 +290,8 @@ function resizeImg() {
   [[ -z "${INPUT_FILE}" || ! -f "${INPUT_FILE}" ]] && exit 1
   [ -z "${CHANGE_SIZE}" ] && exit 1
 
-  INPUT_FILE="$(readlink -f "${INPUT_FILE}")"
-  OUTPUT_FILE="$(readlink -f "${OUTPUT_FILE}")"
+  INPUT_FILE="$(realpath "${INPUT_FILE}")"
+  OUTPUT_FILE="$(realpath "${OUTPUT_FILE}")"
 
 
   SIZE=$(($(du -m "${INPUT_FILE}" | awk '{print $1}')$(echo "${CHANGE_SIZE}" | sed 's/M//g; s/b//g')))
@@ -349,47 +310,28 @@ function resizeImg() {
   sudo losetup -d ${LOOPX}
 }
 
-# convertova
+# createvmx
 # $1 bootloader file
-# $2 ova file
-function convertova() {
+# $2 vmx name
+function createvmx() {
   BLIMAGE=${1}
-  OVAPATH=${2}
+  VMNAME=${2}
 
-  BLIMAGE="$(readlink -f "${BLIMAGE}")"
-  OVAPATH="$(readlink -f "${OVAPATH}")"
-  VMNAME="$(basename "${OVAPATH}" .ova)"
-
-  # Download and install ovftool if it doesn't exist
-  if [ ! -x ovftool/ovftool ]; then
-    rm -rf ovftool ovftool.zip
-    curl -skL https://github.com/rgl/ovftool-binaries/raw/main/archive/VMware-ovftool-4.6.0-21452615-lin.x86_64.zip -o ovftool.zip
-    if [ $? -ne 0 ]; then
-      echo "Failed to download ovftool"
-      exit 1
-    fi
-    unzip ovftool.zip -d . >/dev/null 2>&1
-    if [ $? -ne 0 ]; then
-      echo "Failed to extract ovftool"
-      exit 1
-    fi
-    chmod +x ovftool/ovftool
-  fi
   if ! command -v qemu-img &>/dev/null; then
     sudo apt install -y qemu-utils
   fi
 
   # Convert raw image to VMDK
-  rm -rf "OVA_${VMNAME}"
-  mkdir -p "OVA_${VMNAME}"
-  qemu-img convert -O vmdk -o 'adapter_type=lsilogic,subformat=streamOptimized,compat6' "${BLIMAGE}" "OVA_${VMNAME}/${VMNAME}-disk1.vmdk"
-  qemu-img create -f vmdk "OVA_${VMNAME}/${VMNAME}-disk2.vmdk" "32G"
+  rm -rf "VMX_${VMNAME}"
+  mkdir -p "VMX_${VMNAME}"
+  qemu-img convert -O vmdk -o 'adapter_type=lsilogic,subformat=streamOptimized,compat6' "${BLIMAGE}" "VMX_${VMNAME}/${VMNAME}-disk1.vmdk"
+  qemu-img create -f vmdk "VMX_${VMNAME}/${VMNAME}-disk2.vmdk" "32G"
 
   # Create VM configuration
-  cat <<_EOF_ >"OVA_${VMNAME}/${VMNAME}.vmx"
-.encoding = "GBK"
+  cat <<_EOF_ >"VMX_${VMNAME}/${VMNAME}.vmx"
+.encoding = "UTF-8"
 config.version = "8"
-virtualHW.version = "21"
+virtualHW.version = "17"
 displayName = "${VMNAME}"
 annotation = "https://github.com/AuxXxilium/arc"
 guestOS = "ubuntu-64"
@@ -437,14 +379,108 @@ ethernet0.virtualDev = "vmxnet3"
 ethernet0.connectionType = "nat"
 ethernet0.allowguestconnectioncontrol = "true"
 ethernet0.present = "TRUE"
+serial0.fileType = "file"
+serial0.fileName = "serial0.log"
+serial0.present = "TRUE"
 sata0.present = "TRUE"
 sata0:0.fileName = "${VMNAME}-disk1.vmdk"
 sata0:0.present = "TRUE"
 sata0:1.fileName = "${VMNAME}-disk2.vmdk"
 sata0:1.present = "TRUE"
 _EOF_
+}
+
+# convertvmx
+# $1 bootloader file
+# $2 vmx file
+function convertvmx() {
+  local BLIMAGE=${1}
+  local VMXPATH=${2}
+
+  BLIMAGE="$(realpath "${BLIMAGE}")"
+  VMXPATH="$(realpath "${VMXPATH}")"
+  local VMNAME="$(basename "${VMXPATH}" .vmx)"
+
+  createvmx "${BLIMAGE}" "${VMNAME}"
+
+  rm -rf "${VMXPATH}"
+  mv -f "VMX_${VMNAME}" "${VMXPATH}"
+}
+
+# convertova
+# $1 bootloader file
+# $2 ova file
+function convertova() {
+  local BLIMAGE=${1}
+  local OVAPATH=${2}
+
+  BLIMAGE="$(realpath "${BLIMAGE}")"
+  OVAPATH="$(realpath "${OVAPATH}")"
+  local VMNAME="$(basename "${OVAPATH}" .ova)"
+
+  createvmx "${BLIMAGE}" "${VMNAME}"
+
+  # Download and install ovftool if it doesn't exist
+  if [ ! -x ovftool/ovftool ]; then
+    rm -rf ovftool ovftool.zip
+    curl -skL https://github.com/rgl/ovftool-binaries/raw/main/archive/VMware-ovftool-4.6.0-21452615-lin.x86_64.zip -o ovftool.zip
+    if [ $? -ne 0 ]; then
+      echo "Failed to download ovftool"
+      exit 1
+    fi
+    unzip ovftool.zip -d . >/dev/null 2>&1
+    if [ $? -ne 0 ]; then
+      echo "Failed to extract ovftool"
+      exit 1
+    fi
+    chmod +x ovftool/ovftool
+  fi
 
   rm -f "${OVAPATH}"
-  ovftool/ovftool "OVA_${VMNAME}/${VMNAME}.vmx" "${OVAPATH}"
-  rm -rf "OVA_${VMNAME}"
+  ovftool/ovftool "VMX_${VMNAME}/${VMNAME}.vmx" "${OVAPATH}"
+  rm -rf "VMX_${VMNAME}"
+}
+
+# createvmc
+# $1 vhd file
+# $2 vmc file
+function createvmc() {
+  local BLIMAGE=${1:-arc.vhd}
+  local VMCPATH=${2:-arc.vmc}
+
+  BLIMAGE="$(basename "${BLIMAGE}")"
+  VMCPATH="$(realpath "${VMCPATH}")"
+
+  cat <<_EOF_ >"${VMCPATH}"
+<?xml version="1.0" encoding="UTF-8"?>
+<preferences>
+    <version type="string">2.0</version>
+    <hardware>
+        <memory>
+          <ram_size type="integer">4096</ram_size>
+        </memory>
+        <pci_bus>
+            <ide_adapter>
+                <ide_controller id="0">
+                    <location id="0">
+                        <drive_type type="integer">1</drive_type>
+                        <pathname>
+                            <relative type="string">${BLIMAGE}</relative>
+                        </pathname>
+                    </location>
+                </ide_controller>
+            </ide_adapter>
+        </pci_bus>
+    </hardware>
+</preferences>
+_EOF_
+}
+
+# copy buildroot
+function copyBuildroot() {
+  DEST_PATH="${1}"
+  rm -rf "${DEST_PATH}"
+  mkdir -p "${DEST_PATH}"
+  cp -f "../${DEST_PATH}/bzImage" "${DEST_PATH}/bzImage-arc"
+  cp -f "../${DEST_PATH}/rootfs.cpio.zst" "${DEST_PATH}/initrd-arc"
 }
